@@ -49,6 +49,8 @@ export interface BandoDataset {
 export interface UserMark {
   status?: 'shortlisted' | 'rejected'
   visited?: boolean
+  /** Date of the (latest) visit, YYYY-MM-DD. Set to today when visited is toggled on. */
+  visitedAt?: string
   rating?: 1 | 2 | 3 | 4 | 5
   comment?: string
   updatedAt: string

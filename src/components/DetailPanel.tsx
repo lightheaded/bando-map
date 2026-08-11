@@ -105,10 +105,25 @@ export function DetailContent() {
         <button
           className={`btn ${mark?.visited ? 'btn-visited' : ''}`}
           title="You were physically there"
-          onClick={() => setMark(item.id, { visited: !mark?.visited })}
+          onClick={() =>
+            setMark(item.id, {
+              visited: !mark?.visited,
+              visitedAt: !mark?.visited ? (mark?.visitedAt ?? new Date().toISOString().slice(0, 10)) : undefined,
+            })
+          }
         >
           {mark?.visited ? '⚑ Visited' : 'Visited?'}
         </button>
+        {mark?.visited && (
+          <input
+            type="date"
+            className="visit-date"
+            aria-label="Visit date"
+            value={mark.visitedAt ?? ''}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setMark(item.id, { visitedAt: e.target.value || undefined })}
+          />
+        )}
       </div>
       <div className="mark-actions">
         <span className="stars" role="radiogroup" aria-label="Rating">
