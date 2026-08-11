@@ -5,12 +5,13 @@
  * pagination is then plain GETs that reuse the session cookie.
  */
 import * as cheerio from 'cheerio'
+import { cachedJson } from './cache.ts'
 
 const BASE = 'https://register.muinas.ee'
 const SEARCH_URL = `${BASE}/public.php?menuID=architecture`
 // Cloudflare in front of register.muinas.ee 520s plain tool UAs, so identify
 // as a browser with a project suffix instead.
-const USER_AGENT =
+export const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 bando-map-scraper'
 
 export const USAGE = {
@@ -112,8 +113,13 @@ function totalCount(html: string): number | undefined {
   return m ? Number(m[1]) : undefined
 }
 
-/** Run one filtered search and return all result rows across pages. */
+/** Run one filtered search and return all result rows across pages. Results are disk-cached by filter. */
 export async function searchArchitecture(filter: { usage?: number; condition?: number }): Promise<ArchitectureRow[]> {
+  const key = `search-u${filter.usage ?? 'x'}-c${filter.condition ?? 'x'}`
+  return cachedJson(key, () => searchArchitectureLive(filter))
+}
+
+async function searchArchitectureLive(filter: { usage?: number; condition?: number }): Promise<ArchitectureRow[]> {
   // Establish a session, then POST the filter into it; pagination GETs reuse the session.
   const jar = new Jar()
   await request(SEARCH_URL, { method: 'GET' }, jar)

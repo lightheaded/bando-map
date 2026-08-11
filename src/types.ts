@@ -17,10 +17,10 @@ export interface Bando {
   lestX?: number
   lestY?: number
   /**
-   * How the coordinate was obtained — building/monument/manual are exact,
+   * How the coordinate was obtained — building/manual are exact,
    * street and village are approximate centroids.
    */
-  geocode: 'building' | 'street' | 'village' | 'monument' | 'manual'
+  geocode: 'building' | 'street' | 'village' | 'manual'
   /** Photo ids under register.muinas.ee/content/architecture/regular/<photoId>.jpg */
   photos: number[]
   /** Local thumbnail path relative to the app base, e.g. "thumbs/45.webp". */
