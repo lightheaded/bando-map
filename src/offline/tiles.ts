@@ -2,8 +2,8 @@ import { sourcesFor, tileUrl, type BaseLayerId } from '../map/layers'
 
 /** Street-level detail; deeper zooms explode the tile count for little gain. */
 export const MAX_SAVE_ZOOM = 16
-/** Refuse absurd downloads — the UI asks the user to zoom in instead. */
-export const MAX_SAVE_TILES = 4000
+/** Download budget per save (~150–300 MB depending on layer). */
+export const MAX_SAVE_TILES = 8000
 /** Rough per-tile size for the pre-download estimate, refined live during it. */
 const EST_TILE_BYTES: Record<string, number> = { kaart: 15_000, foto: 35_000, hybriid: 8_000 }
 
@@ -16,14 +16,18 @@ const latToY = (lat: number, z: number) => {
 export interface AreaPlan {
   urls: string[]
   estBytes: number
-  /** True when the area exceeds MAX_SAVE_TILES and can't be saved as-is. */
+  zFrom: number
+  /** Deepest zoom that fits the budget — below MAX_SAVE_ZOOM for large areas. */
+  zTo: number
+  /** True when even a single zoom level exceeds the budget (practically never). */
   tooBig: boolean
 }
 
 /**
- * Everything needed to keep the current view usable offline: all tiles of the
- * active base layer covering `bounds`, from the current zoom down to street
- * level (MAX_SAVE_ZOOM).
+ * Keep the current view usable offline: all tiles of the active base layer
+ * covering `bounds`, from the current zoom down to the deepest level that
+ * fits the tile budget. Any view is savable — a bigger area simply saves at
+ * shallower detail, and the UI says so.
  */
 export function planAreaSave(
   bounds: [number, number, number, number],
@@ -32,24 +36,35 @@ export function planAreaSave(
 ): AreaPlan {
   const [w, s, e, n] = bounds
   const zFrom = Math.max(4, Math.floor(currentZoom))
+  const sources = sourcesFor(layer)
+  const tilesAt = (z: number) => (lonToX(e, z) - lonToX(w, z) + 1) * (latToY(s, z) - latToY(n, z) + 1)
+
+  // Deepest zoom whose cumulative tile count stays within budget.
+  let zTo = zFrom
+  let count = tilesAt(zFrom) * sources.length
+  while (zTo < MAX_SAVE_ZOOM && count + tilesAt(zTo + 1) * sources.length <= MAX_SAVE_TILES) {
+    zTo++
+    count += tilesAt(zTo) * sources.length
+  }
+  if (count > MAX_SAVE_TILES) return { urls: [], estBytes: 0, zFrom, zTo: zFrom, tooBig: true }
+
   const urls: string[] = []
   let estBytes = 0
-  for (const source of sourcesFor(layer)) {
-    for (let z = zFrom; z <= MAX_SAVE_ZOOM; z++) {
+  for (const source of sources) {
+    for (let z = zFrom; z <= zTo; z++) {
       const x0 = lonToX(w, z)
       const x1 = lonToX(e, z)
       const y0 = latToY(n, z)
       const y1 = latToY(s, z)
       for (let x = x0; x <= x1; x++) {
         for (let y = y0; y <= y1; y++) {
-          if (urls.length > MAX_SAVE_TILES) return { urls, estBytes, tooBig: true }
           urls.push(tileUrl(source, z, x, y))
           estBytes += EST_TILE_BYTES[source]
         }
       }
     }
   }
-  return { urls, estBytes, tooBig: false }
+  return { urls, estBytes, zFrom, zTo, tooBig: false }
 }
 
 export interface SaveProgress {

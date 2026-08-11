@@ -38,6 +38,8 @@ export interface BandoDataset {
   version: 1
   scrapedAt: string
   source: string
+  /** Total size of all referenced thumbnails, so "save all photos" can state its download size up front. */
+  thumbsBytes?: number
   bandos: Bando[]
 }
 

@@ -35,7 +35,7 @@ export function OfflineButton() {
       aria-expanded={open}
       title="Offline maps & storage"
     >
-      {online ? '⇣' : '⇣ offline'}
+      Offline
       {!online && <span className="offline-dot" aria-label="You are offline" />}
     </button>
   )
@@ -68,6 +68,7 @@ export function OfflinePanel() {
   const mapView = useAppStore((s) => s.mapView)
   const baseLayer = useAppStore((s) => s.baseLayer)
   const bandos = useAppStore((s) => s.bandos)
+  const thumbsBytes = useAppStore((s) => s.thumbsBytes)
   const showToast = useAppStore((s) => s.showToast)
   const online = useOnline()
 
@@ -130,7 +131,8 @@ export function OfflinePanel() {
         <div className="offline-card-head">
           <strong>Save this view</strong>
           <span className="offline-sub">
-            {BASE_LAYERS[baseLayer]} layer · zoom {Math.floor(mapView?.zoom ?? 0)}–{MAX_SAVE_ZOOM}
+            {BASE_LAYERS[baseLayer]} layer · zoom {plan?.zFrom ?? Math.floor(mapView?.zoom ?? 0)}–
+            {plan?.zTo ?? MAX_SAVE_ZOOM}
           </span>
         </div>
         {saving ? (
@@ -143,14 +145,21 @@ export function OfflinePanel() {
         ) : plan?.tooBig ? (
           <p className="offline-sub">This view covers too many tiles to save at once — zoom in a bit first.</p>
         ) : (
-          <div className="offline-row">
-            <span className="offline-sub">
-              {plan?.urls.length ?? 0} tiles · ~{fmtBytes(plan?.estBytes ?? 0)}
-            </span>
-            <button className="btn btn-small btn-primary" onClick={saveArea} disabled={!online || !plan}>
-              {online ? 'Save area' : 'Offline'}
-            </button>
-          </div>
+          <>
+            <div className="offline-row">
+              <span className="offline-sub">
+                {plan?.urls.length ?? 0} tiles · ~{fmtBytes(plan?.estBytes ?? 0)}
+              </span>
+              <button className="btn btn-small btn-primary" onClick={saveArea} disabled={!online || !plan}>
+                {online ? 'Save area' : 'No connection'}
+              </button>
+            </div>
+            {plan && plan.zTo < MAX_SAVE_ZOOM && (
+              <p className="offline-sub">
+                Large area — saved down to zoom {plan.zTo}. Zoom the map in for street-level detail.
+              </p>
+            )}
+          </>
         )}
       </div>
 
@@ -158,14 +167,20 @@ export function OfflinePanel() {
         <div className="offline-card-head">
           <strong>All spot photos</strong>
           <span className="offline-sub">
-            {stats ? `${Math.min(stats.photos.count, thumbs.length)} of ${thumbs.length} saved` : `${thumbs.length} photos`}
+            {thumbs.length} photos · {thumbsBytes ? fmtBytes(thumbsBytes) : `~${fmtBytes(thumbs.length * 30_000)}`}
           </span>
         </div>
         {savingPhotos ? (
           <Progress p={savingPhotos} />
         ) : (
           <div className="offline-row">
-            <span className="offline-sub">{stats ? fmtBytes(stats.photos.bytes) : '…'}</span>
+            <span className="offline-sub">
+              {stats
+                ? stats.photos.count >= thumbs.length
+                  ? `all saved · ${fmtBytes(stats.photos.bytes)}`
+                  : `${Math.min(stats.photos.count, thumbs.length)} saved so far · ${fmtBytes(stats.photos.bytes)}`
+                : '…'}
+            </span>
             <button
               className="btn btn-small"
               onClick={savePhotos}

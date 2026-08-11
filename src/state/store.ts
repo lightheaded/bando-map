@@ -6,6 +6,8 @@ import { DEFAULT_FILTERS, type FilterState } from './filters'
 interface AppState {
   bandos: Bando[]
   scrapedAt?: string
+  /** Total size of all thumbnails (from the dataset), for the offline panel. */
+  thumbsBytes?: number
   selectedId?: number
   baseLayer: BaseLayerId
   toast?: { msg: string; action?: { label: string; onClick: () => void } }
@@ -43,7 +45,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined
 export const useAppStore = create<AppState>((set) => ({
   bandos: [],
   baseLayer: (localStorage.getItem('bando-map:baseLayer') as BaseLayerId) || 'kaart',
-  setDataset: (d) => set({ bandos: d.bandos, scrapedAt: d.scrapedAt }),
+  setDataset: (d) => set({ bandos: d.bandos, scrapedAt: d.scrapedAt, thumbsBytes: d.thumbsBytes }),
   // Selecting a place also expands the mobile sheet, so the detail card shows.
   select: (id) => set((s) => ({ selectedId: id, sheetOpen: id != null ? true : s.sheetOpen })),
   setBaseLayer: (l) => {
