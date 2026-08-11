@@ -50,6 +50,13 @@ Everything is disk-cached under `data/cache/` (gitignored) — delete it for a f
 - [ ] **Phase 3 — Polish & offline**: photo markers at high zoom, full offline support in the field (PWA: app shell, dataset, thumbnails, and visited-area map tiles cached locally)
 - [ ] **Phase 4 — Ideas**: accounts with SSO for cross-device sync, auto-graded attributes (remote vs urban), periodic scraping
 
+## Deployment
+
+The app is a static site served from S3 behind CloudFront at **https://bando.toom.as**.
+
+- `infra/` holds the Terraform/OpenTofu stack: private S3 origin (OAC), CloudFront with SPA fallback, ACM certificate, Route53 records, and a GitHub-OIDC deploy role — no long-lived AWS keys anywhere. Apply locally: `cd infra && terraform apply` (uses ambient AWS credentials, or pass `-var aws_profile=...`). State is local and gitignored.
+- `.github/workflows/deploy.yml` builds and syncs `dist/` to S3 on every push to `main` (hashed assets get immutable caching; the HTML shell and dataset revalidate), then invalidates CloudFront. It authenticates by assuming the OIDC role from repo variables `AWS_DEPLOY_ROLE_ARN`, `S3_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID`.
+
 ## Attribution
 
 - Building data: [Kultuurimälestiste register](https://register.muinas.ee/) (Muinsuskaitseamet), reused under Estonia's public information act
