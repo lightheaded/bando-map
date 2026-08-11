@@ -10,7 +10,7 @@ import { mkdir, access, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import proj4 from 'proj4'
-import { cachedJson } from './cache.ts'
+import { readCachedJson, writeCachedJson } from './cache.ts'
 import { USER_AGENT } from './muinas.ts'
 
 const run = promisify(execFile)
@@ -30,7 +30,8 @@ export interface PdfCoords {
   lestY: number
 }
 
-async function ensurePdfFile(recordId: number): Promise<string | null> {
+/** 'absent' = the register has no PDF for this record (404); null = transient failure. */
+async function ensurePdfFile(recordId: number): Promise<string | 'absent' | null> {
   const path = `${PDF_DIR}/${recordId}.pdf`
   try {
     await access(path)
@@ -42,6 +43,7 @@ async function ensurePdfFile(recordId: number): Promise<string | null> {
     headers: { 'User-Agent': USER_AGENT },
   })
   await sleep(pdfDelayMs)
+  if (res.status === 404) return 'absent'
   if (!res.ok) {
     console.warn(`  pdf ${recordId}: HTTP ${res.status}`)
     return null
@@ -51,22 +53,37 @@ async function ensurePdfFile(recordId: number): Promise<string | null> {
   return path
 }
 
-async function extractCoords(recordId: number): Promise<PdfCoords | null> {
-  const path = await ensurePdfFile(recordId)
-  if (!path) return null
-  const { stdout } = await run('pdftotext', [path, '-'])
-  // "X: 6517722.1 Y: 670008.5" — Estonian convention: X = northing, Y = easting.
-  const m = stdout.match(/X:\s*(\d{6,7}(?:\.\d+)?)\s*Y:\s*(\d{5,6}(?:\.\d+)?)/)
+function extractFromText(text: string): PdfCoords | null {
+  // Seen formats: "X: 6517722.1 Y: 670008.5" and "X=6598723 Y=602837".
+  // Estonian convention: X = northing, Y = easting. Line breaks may intervene.
+  const m = text.match(/X\s*[:=]\s*(\d{7}(?:[.,]\d+)?)[\s\S]{0,12}?Y\s*[:=]\s*(\d{6}(?:[.,]\d+)?)/)
   if (!m) return null
-  const northing = Number(m[1])
-  const easting = Number(m[2])
+  const northing = Number(m[1].replace(',', '.'))
+  const easting = Number(m[2].replace(',', '.'))
   const [lon, lat] = proj4(LEST97, 'WGS84', [easting, northing])
   // Sanity: must land in Estonia, or the PDF layout changed.
   if (lat < 57.3 || lat > 60 || lon < 21 || lon > 28.5) return null
   return { lat, lon, lestX: easting, lestY: northing }
 }
 
-/** Cached PDF coordinates for a record; null when the PDF is missing or has none. */
-export function pdfCoords(recordId: number): Promise<PdfCoords | null> {
-  return cachedJson(`pdfcoords/${recordId}`, () => extractCoords(recordId))
+/**
+ * Cached PDF coordinates for a record. A missing/unfetchable PDF is NOT
+ * cached, so the next run retries it; only actual extraction results
+ * (including "this PDF has no coordinates") are cached.
+ */
+export async function pdfCoords(recordId: number): Promise<PdfCoords | null> {
+  const key = `pdfcoords/${recordId}`
+  const hit = await readCachedJson<PdfCoords | null>(key)
+  if (hit !== undefined) return hit
+  const path = await ensurePdfFile(recordId)
+  if (path === null) return null // transient failure — leave uncached for retry
+  if (path === 'absent') {
+    await writeCachedJson(key, null) // the register has no PDF; don't re-ask
+    return null
+  }
+  const { stdout } = await run('pdftotext', [path, '-'])
+  const coords = extractFromText(stdout)
+  if (!coords) console.warn(`  pdf ${recordId}: no coordinates found in text`)
+  await writeCachedJson(key, coords)
+  return coords
 }
