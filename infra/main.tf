@@ -195,8 +195,11 @@ resource "aws_route53_record" "site_aaaa" {
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
-  # Thumbprint is ignored by AWS for GitHub's OIDC (trusted CA) but required by the API.
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+  # GitHub rotates between two signing certs — list both thumbprints.
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1",
+    "1c58a3a8518e8759bf075b76b750d4f2df264fcd",
+  ]
 }
 
 resource "aws_iam_role" "github_deploy" {
