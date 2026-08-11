@@ -46,7 +46,7 @@ Everything is disk-cached under `data/cache/` (gitignored) — delete it for a f
 
 - [x] **Phase 0 — POC**: scrape the ~116 unused/poor-condition buildings, geocode, show clustered on the map with photos and detail panel
 - [x] **Phase 1 — Full data pipeline**: all catalog records with usage/condition attribution, local thumbnails, manual coordinate overrides
-- [ ] **Phase 2 — User state**: visited / hide / 1–5 stars / comment, filters, JSON export/import
+- [x] **Phase 2 — User state**: triage workflow (shortlist / reject online, then visit, rate and take notes in the field), multi-select filters, note-aware search, JSON export/import, custom places, shareable deep links
 - [ ] **Phase 3 — Polish & offline**: photo markers at high zoom, full offline support in the field (PWA: app shell, dataset, thumbnails, and visited-area map tiles cached locally)
 - [ ] **Phase 4 — Ideas**: accounts with SSO for cross-device sync, auto-graded attributes (remote vs urban), periodic scraping
 
