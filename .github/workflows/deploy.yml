@@ -32,15 +32,16 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: eu-north-1
 
-      # Content-addressed assets get long cache; the HTML shell, dataset and
-      # service worker revalidate — an immutable sw.js would freeze the PWA on
-      # its current version forever.
+      # Content-addressed assets get long cache; the HTML shell and service
+      # worker revalidate — an immutable sw.js would freeze the PWA on its
+      # current version forever.
       - name: Upload assets
         run: |
-          # pdfs/ is the register archive uploaded out-of-band — never delete it
+          # data/, thumbs/ and pdfs/ live only in S3 (published out-of-band by
+          # `npm run publish-data` and the pdf upload) — never touch them here.
           aws s3 sync dist "s3://${{ vars.S3_BUCKET }}" \
             --delete \
-            --exclude index.html --exclude "data/*" --exclude "pdfs/*" \
+            --exclude index.html --exclude "data/*" --exclude "thumbs/*" --exclude "pdfs/*" \
             --exclude sw.js --exclude manifest.webmanifest --exclude registerSW.js \
             --cache-control "public,max-age=31536000,immutable"
           aws s3 cp dist/index.html "s3://${{ vars.S3_BUCKET }}/index.html" \
@@ -51,11 +52,9 @@ jobs:
                 --cache-control "public,max-age=0,must-revalidate"
             fi
           done
-          aws s3 sync dist/data "s3://${{ vars.S3_BUCKET }}/data" \
-            --cache-control "public,max-age=300,must-revalidate"
 
       - name: Invalidate CloudFront
         run: |
           aws cloudfront create-invalidation \
             --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
-            --paths "/index.html" "/data/*" "/sw.js" "/manifest.webmanifest" "/registerSW.js"
+            --paths "/index.html" "/sw.js" "/manifest.webmanifest" "/registerSW.js"

@@ -20,12 +20,20 @@ npm install
 npm run dev        # app on http://localhost:5173
 ```
 
-The dataset (`public/data/bandos.json`) is committed, so the app works without running the scraper.
+The scraped dataset and thumbnails are **not in git** (the register's content isn't ours to redistribute) — they live only in S3 and the scraper reproduces them. For a working dev setup, pull the live dataset:
+
+```sh
+mkdir -p public/data
+curl -so public/data/bandos.json https://bando.lagle.xyz/data/bandos.json
+```
+
+Photos will 404 locally without `public/thumbs/` — run the scraper (below) or sync them from the bucket (`aws s3 sync s3://bando.lagle.xyz/thumbs public/thumbs`, needs credentials) if you want them.
 
 ## Refreshing the data
 
 ```sh
-npm run scrape     # first run ~30–40 min with default polite delays; reruns are cached
+npm run scrape        # first run ~30–40 min with default polite delays; reruns are cached
+npm run publish-data  # sync public/data + public/thumbs to S3, invalidate /data/*
 ```
 
 The pipeline (`scripts/scrape/`):
@@ -35,7 +43,7 @@ The pipeline (`scripts/scrape/`):
 3. Geocodes candidates with Maa-amet's free [In-ADS gazetteer](https://inaadress.maaamet.ee/) — no API key. Register addresses predate the administrative reforms, so queries retry with settlement-type words stripped (e.g. *Ilmatsalu alevik* is now a *küla* — the stale type word makes In-ADS return nothing). Every point carries a `geocode` precision flag (`building` / `street` / `village`), since some register addresses are only village-level.
 4. Applies manual corrections from `data/overrides.json` — coordinates from the app's Move tool (`geocode: "manual"`) and register-field edits from the Edit tool; wins over everything. Cross-referencing the official monument register was tried and dropped: the two catalogs name buildings too differently for reliable matching.
 5. Downloads one photo per candidate and stores a 480px webp in `public/thumbs/` (local thumbnails keep the map fast and are a step toward full offline use).
-6. Writes `public/data/bandos.json` (geocoded candidates, used by the app) and `data/catalog.json` (everything).
+6. Writes `public/data/bandos.json` (geocoded candidates, used by the app) and `data/catalog.json` (everything). Both are gitignored — `npm run publish-data` ships them to S3, which is their only home.
 
 Everything is disk-cached under `data/cache/` (gitignored) — delete it for a fresh run. `SCRAPE_DELAY_MS` (default 3000) and `IMAGE_DELAY_MS` (default 1500) tune request pacing. Be considerate — it's a small public heritage service.
 
@@ -82,11 +90,13 @@ Everything scales to zero. Monthly cost at ~5 daily active users (~3k requests):
 The app is a static site served from S3 behind CloudFront at **https://bando.lagle.xyz**.
 
 - `infra/` holds the Terraform/OpenTofu stack: private S3 origin (OAC), CloudFront with SPA fallback, ACM certificate, Route53 records, and a GitHub-OIDC deploy role — no long-lived AWS keys anywhere. Apply locally: `cd infra && terraform apply` (uses ambient AWS credentials, or pass `-var aws_profile=...`). State is local and gitignored.
-- `.github/workflows/deploy.yml` builds and syncs `dist/` to S3 on every push to `main` (hashed assets get immutable caching; the HTML shell and dataset revalidate), then invalidates CloudFront. It authenticates by assuming the OIDC role from repo variables `AWS_DEPLOY_ROLE_ARN`, `S3_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID`.
+- `.github/workflows/deploy.yml` builds and syncs `dist/` to S3 on every push to `main` (hashed assets get immutable caching; the HTML shell revalidates), then invalidates CloudFront. It authenticates by assuming the OIDC role from repo variables `AWS_DEPLOY_ROLE_ARN`, `S3_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID`. The dataset, thumbnails and PDF archive under `/data/`, `/thumbs/` and `/pdfs/` are published out-of-band (`npm run publish-data`) and deploys never touch them.
 
-## Attribution
+## Attribution & license
 
 - Building data: [Kultuurimälestiste register](https://register.muinas.ee/) (Muinsuskaitseamet), reused under Estonia's public information act
 - Base map, orthophoto, geocoding: [Maa-amet](https://geoportaal.maaamet.ee/)
+
+The source code is [MIT-licensed](LICENSE). Register data and photos are not part of this repository and remain with their respective owners.
 
 Fly responsibly: heritage-listed buildings are protected — look, film, don't touch. Check local drone regulations (droonid.ee) before flying.
