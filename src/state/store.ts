@@ -13,6 +13,8 @@ interface AppState {
   filtersOpen: boolean
   /** Add-place flow: 'picking' = waiting for a map tap, coords = form open. */
   placeDraft?: 'picking' | { lat: number; lon: number }
+  /** Move tool: id of the bando whose next map tap sets the corrected position. */
+  moveTarget?: number
   /** One-shot map target for deep links whose id wasn't found. */
   pendingView?: { lat: number; lon: number }
   /** Current map viewport (west,south,east,north + center), updated on moveend. */
@@ -27,6 +29,7 @@ interface AppState {
   resetFilters: () => void
   setFiltersOpen: (open: boolean) => void
   setPlaceDraft: (draft?: 'picking' | { lat: number; lon: number }) => void
+  setMoveTarget: (id?: number) => void
   setPendingView: (view?: { lat: number; lon: number }) => void
   setMapView: (view: { bounds: [number, number, number, number]; center: [number, number] }) => void
   setSheetOpen: (open: boolean) => void
@@ -54,6 +57,7 @@ export const useAppStore = create<AppState>((set) => ({
   resetFilters: () => set({ filters: DEFAULT_FILTERS }),
   setFiltersOpen: (open) => set({ filtersOpen: open }),
   setPlaceDraft: (draft) => set({ placeDraft: draft }),
+  setMoveTarget: (id) => set({ moveTarget: id }),
   setPendingView: (view) => set({ pendingView: view }),
   sheetOpen: false,
   setMapView: (view) => set({ mapView: view }),

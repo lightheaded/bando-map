@@ -23,6 +23,8 @@ export interface Bando {
   geocode: 'register' | 'building' | 'street' | 'village' | 'manual'
   /** Photo ids under register.muinas.ee/content/architecture/regular/<photoId>.jpg */
   photos: number[]
+  /** True when the register PDF is archived at /pdfs/<id>.pdf. */
+  pdf?: boolean
   /** True for user-added places (kept in localStorage, not in the dataset). */
   custom?: boolean
   /**
@@ -53,6 +55,8 @@ export interface UserMark {
   visitedAt?: string
   rating?: 1 | 2 | 3 | 4 | 5
   comment?: string
+  /** Manually corrected position (the "Move" tool); overrides the dataset coordinates. */
+  fix?: { lat: number; lon: number }
   updatedAt: string
 }
 

@@ -21,6 +21,30 @@ function toggle<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
 }
 
+/** Copies moved pins as a data/overrides.json snippet, so fixes can flow back into the dataset. */
+function CopyFixesButton() {
+  const marks = useMarksStore((s) => s.marks)
+  const showToast = useAppStore((s) => s.showToast)
+  const fixes = Object.entries(marks).filter(([id, m]) => m.fix && Number(id) > 0)
+  if (!fixes.length) return null
+  const copy = async () => {
+    const overrides = Object.fromEntries(
+      fixes.map(([id, m]) => [id, { lat: Number(m.fix!.lat.toFixed(6)), lon: Number(m.fix!.lon.toFixed(6)) }]),
+    )
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(overrides, null, 2))
+      showToast(`Copied ${fixes.length} fix(es) — paste into data/overrides.json and rerun the scrape`)
+    } catch {
+      showToast('Could not access the clipboard')
+    }
+  }
+  return (
+    <button className="btn btn-small" onClick={copy} title="Copy moved pins as data/overrides.json content">
+      Copy fixes ({fixes.length})
+    </button>
+  )
+}
+
 const STATUS_LABELS: Record<TriageStatus, string> = { new: 'New', shortlisted: 'Shortlisted', rejected: 'Rejected' }
 const STATUS_DOTS: Record<TriageStatus, string> = { new: '#e11d48', shortlisted: '#2563eb', rejected: '#71717a' }
 
@@ -155,6 +179,7 @@ export function FilterPanel() {
         <button className="btn btn-small" onClick={() => fileRef.current?.click()}>
           Import
         </button>
+        <CopyFixesButton />
         <input
           ref={fileRef}
           type="file"

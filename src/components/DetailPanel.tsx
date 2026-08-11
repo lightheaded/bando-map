@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
-import { placeToBando } from '../state/filters'
+import { placeToBando, resolveBando } from '../state/filters'
 import { en, ICON, MUINAS_DETAIL_URL, PHOTO_URL, PDF_URL, GMAPS_URL, GMAPS_DIRECTIONS_URL, XGIS_URL } from '../types'
 
 function Chip({ value, className }: { value: string; className?: string }) {
@@ -31,7 +31,8 @@ export function DetailContent() {
     setComment(selectedId != null ? (useMarksStore.getState().marks[selectedId]?.comment ?? '') : '')
   }, [selectedId])
 
-  const item = bando ?? (place ? placeToBando(place) : undefined)
+  const raw = bando ?? (place ? placeToBando(place) : undefined)
+  const item = raw && resolveBando(raw, mark)
   if (selectedId == null || !item) return null
 
   const status = mark?.status
@@ -74,6 +75,7 @@ export function DetailContent() {
           </span>
         )}
         {item.custom && <span className="chip">📍 yours</span>}
+        {mark?.fix && <span className="chip">📌 moved</span>}
       </div>
       {item.photos.length > 0 && (
         <div className="photos">
@@ -93,6 +95,21 @@ export function DetailContent() {
         <button className={`btn btn-small ${copied ? 'btn-success' : ''}`} onClick={copyCoords}>
           {copied ? 'Copied ✓' : 'Copy'}
         </button>
+        <button
+          className="btn btn-small"
+          title="Correct this pin's position: click, then tap the map at the right spot"
+          onClick={() => {
+            useAppStore.getState().setMoveTarget(item.id)
+            showToast('Tap the map at the correct location')
+          }}
+        >
+          Move
+        </button>
+        {mark?.fix && (
+          <button className="btn btn-small btn-muted" onClick={() => setMark(item.id, { fix: undefined })}>
+            Reset pin
+          </button>
+        )}
       </div>
       <div className="mark-actions">
         <button
@@ -184,7 +201,7 @@ export function DetailContent() {
             muinas.ee
           </a>
         )}
-        {!item.custom && (
+        {item.pdf && (
           <a className="btn" href={PDF_URL(item.id)} target="_blank" rel="noreferrer" title="Register PDF (archived)">
             PDF
           </a>
