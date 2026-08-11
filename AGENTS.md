@@ -41,4 +41,4 @@ The token needs the `project` scope (`gh auth refresh -s project,read:project`).
   terraform state, or anything personal. gitleaks runs on every commit.
 - `src/types.ts` is the single schema shared by app and scraper; keep it that way.
 - Verify UI changes with a real browser (Playwright) on desktop and mobile viewports
-  before committing — `window.__map` and `window.__store` are exposed in dev builds.
+  before committing — `window.__map` and `window.__store` are exposed in all builds.

@@ -17,10 +17,12 @@ interface AppState {
   moveTarget?: number
   /** One-shot map target for deep links whose id wasn't found. */
   pendingView?: { lat: number; lon: number }
-  /** Current map viewport (west,south,east,north + center), updated on moveend. */
-  mapView?: { bounds: [number, number, number, number]; center: [number, number] }
+  /** Current map viewport (west,south,east,north + center + zoom), updated on moveend. */
+  mapView?: { bounds: [number, number, number, number]; center: [number, number]; zoom: number }
   /** Mobile bottom sheet expanded to show the list. */
   sheetOpen: boolean
+  /** The Offline panel (storage, save-for-offline) is open. */
+  offlineOpen: boolean
   setDataset: (d: BandoDataset) => void
   select: (id?: number) => void
   setBaseLayer: (l: BaseLayerId) => void
@@ -31,8 +33,9 @@ interface AppState {
   setPlaceDraft: (draft?: 'picking' | { lat: number; lon: number }) => void
   setMoveTarget: (id?: number) => void
   setPendingView: (view?: { lat: number; lon: number }) => void
-  setMapView: (view: { bounds: [number, number, number, number]; center: [number, number] }) => void
+  setMapView: (view: { bounds: [number, number, number, number]; center: [number, number]; zoom: number }) => void
   setSheetOpen: (open: boolean) => void
+  setOfflineOpen: (open: boolean) => void
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined
@@ -57,7 +60,10 @@ export const useAppStore = create<AppState>((set) => ({
   filtersOpen: false,
   setFilters: (patch) => set((s) => ({ filters: { ...s.filters, ...patch } })),
   resetFilters: () => set({ filters: DEFAULT_FILTERS }),
-  setFiltersOpen: (open) => set({ filtersOpen: open }),
+  // Filters and Offline are both inline sidebar sections — one at a time.
+  setFiltersOpen: (open) => set((s) => ({ filtersOpen: open, offlineOpen: open ? false : s.offlineOpen })),
+  offlineOpen: false,
+  setOfflineOpen: (open) => set((s) => ({ offlineOpen: open, filtersOpen: open ? false : s.filtersOpen })),
   setPlaceDraft: (draft) => set({ placeDraft: draft }),
   setMoveTarget: (id) => set({ moveTarget: id }),
   setPendingView: (view) => set({ pendingView: view }),
@@ -66,6 +72,5 @@ export const useAppStore = create<AppState>((set) => ({
   setSheetOpen: (open) => set({ sheetOpen: open }),
 }))
 
-if (import.meta.env.DEV) {
-  ;(window as unknown as { __store: typeof useAppStore }).__store = useAppStore
-}
+// Debug/verification handle (harmless — all state is the user's own, local).
+;(window as unknown as { __store: typeof useAppStore }).__store = useAppStore

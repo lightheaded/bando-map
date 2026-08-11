@@ -48,6 +48,7 @@ Everything is disk-cached under `data/cache/` (gitignored) — delete it for a f
 - **Custom places**: add your own spots (name + notes, no photos) straight onto the map; they live in localStorage and ride along in exports.
 - **Corrections**: the *Move* tool repositions a wrong pin (with undo), the *Edit* tool corrects register fields (name, address, era, usage, condition). Corrections are stored as their own keys in the export, and *Copy fixes* in the filter panel emits them as ready-to-paste `data/overrides.json` content, so they flow back into the shared dataset on the next scrape.
 - **Deep links**: selecting a spot puts `#b/<id>@<lat>,<lon>` in the URL — share it, and if the receiver doesn't have that spot, the map zooms to the coordinates instead.
+- **Offline (PWA)**: installable; everything browsed (app, dataset, photos, map tiles) is cached automatically and keeps working without signal. The ⇣ Offline panel is transparent about storage — real byte counts per category, clearable — and lets you save the current map view down to street level, or all spot photos, before heading somewhere remote. Maa-amet serves CORS-clean tiles, so cached sizes are honest (no opaque-response padding).
 - `src/types.ts` is the single schema shared by the app and the scraper.
 
 ## Roadmap
@@ -57,7 +58,7 @@ Work is tracked on the [Bando Map project board](https://github.com/users/lighth
 - [x] **Phase 0 — POC**: scrape the ~116 unused/poor-condition buildings, geocode, show clustered on the map with photos and detail panel
 - [x] **Phase 1 — Full data pipeline**: all catalog records with usage/condition attribution, local thumbnails, manual coordinate overrides
 - [x] **Phase 2 — User state**: triage workflow (shortlist / reject online, then visit, rate and take notes in the field), multi-select filters, note-aware search, JSON export/import, custom places, shareable deep links
-- [ ] **Phase 3 — Polish & offline**: photo markers at high zoom, full offline support in the field (PWA: app shell, dataset, thumbnails, and visited-area map tiles cached locally)
+- [x] **Phase 3 — Polish & offline**: photo markers for unclustered spots, installable PWA with full offline support (app shell, dataset, photos, and saved map areas cached locally with a transparent storage panel)
 - [ ] **Phase 4 — Ideas**: accounts with SSO for cross-device sync, auto-graded attributes (remote vs urban), periodic scraping
 
 ## Deployment
