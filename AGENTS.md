@@ -40,11 +40,15 @@ The token needs the `project` scope (`gh auth refresh -s project,read:project`).
   are obtained is deliberately not documented here; credentials never live in the repo
   or CI. The SPA-side ids live in `src/sync/config.ts`. Keep it $0 idle:
   on-demand/per-request services only, no provisioned capacity.
-- The dataset is built by `npm run scrape` (see README). Be polite to register.muinas.ee:
-  keep the default delays, never run the pipeline while `npm run dev` is serving (writes
-  into `public/` make Vite full-reload continuously).
-- Never commit: `data/pdfs/` (338MB archive, lives in S3 under `/pdfs/`), `data/cache/`,
-  terraform state, or anything personal. gitleaks runs on every commit.
+- The dataset is built by `npm run scrape` and shipped with `npm run publish-data`
+  (see README). Be polite to register.muinas.ee: keep the default delays, never run the
+  pipeline while `npm run dev` is serving (writes into `public/` make Vite full-reload
+  continuously).
+- Never commit scraped register content — `public/data/`, `public/thumbs/`,
+  `data/catalog.json`, `data/pdfs/` (338MB archive) — it isn't ours to redistribute;
+  S3 is its only home (`npm run publish-data`, pdfs out-of-band) and the scraper
+  reproduces it. It was purged from git history on 2026-08-11; don't reintroduce it.
+  Also never commit terraform state or anything personal. gitleaks runs on every commit.
 - `src/types.ts` is the single schema shared by app and scraper; keep it that way.
 - Verify UI changes with a real browser (Playwright) on desktop and mobile viewports
   before committing — `window.__map` and `window.__store` are exposed in all builds.
