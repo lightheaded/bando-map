@@ -43,12 +43,24 @@ async function query(address: string): Promise<InAdsAddress[]> {
 }
 
 /**
- * Geocode a register address. Tries the full address first, then falls back to
- * the bare settlement, always requiring the municipality to match so a fuzzy
- * hit in the wrong parish is rejected.
+ * Settlement types have changed in reforms since the register was written
+ * (e.g. Ilmatsalu alevik is now Ilmatsalu küla) and a stale type word makes
+ * In-ADS return zero results — so also try with the type words stripped.
+ */
+const stripSettlementType = (address: string) => address.replace(/\s+(alevik|alev|küla|linn)\b/gi, '')
+
+/**
+ * Geocode a register address. Tries the full address first (also with
+ * settlement-type words stripped), then falls back to the bare settlement,
+ * always requiring the municipality to match so a fuzzy hit in the wrong
+ * parish is rejected.
  */
 export async function geocode(address: string, municipality: string, county: string): Promise<GeocodeResult | undefined> {
-  const attempts = [`${address}, ${municipality}`, address, municipality]
+  const stripped = stripSettlementType(address)
+  const attempts = [
+    ...new Set([`${address}, ${municipality}`, `${stripped}, ${municipality}`, address, stripped]),
+    municipality,
+  ]
   for (const attempt of attempts) {
     const candidates = await query(attempt)
     await sleep(300)

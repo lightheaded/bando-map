@@ -7,6 +7,7 @@ interface MarksState {
   places: CustomPlace[]
   setMark: (id: number, patch: Partial<Omit<UserMark, 'updatedAt'>>) => void
   addPlace: (place: Omit<CustomPlace, 'id' | 'createdAt'>) => number
+  updatePlace: (id: number, patch: Partial<Omit<CustomPlace, 'id' | 'createdAt'>>) => void
   removePlace: (id: number) => void
   importData: (data: UserData) => { merged: number }
 }
@@ -35,6 +36,8 @@ export const useMarksStore = create<MarksState>()(
         set((s) => ({ places: [...s.places, { ...place, id, createdAt: new Date().toISOString() }] }))
         return id
       },
+      updatePlace: (id, patch) =>
+        set((s) => ({ places: s.places.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
       removePlace: (id) =>
         set((s) => {
           const marks = { ...s.marks }

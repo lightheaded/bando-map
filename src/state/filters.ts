@@ -52,11 +52,22 @@ export function activeFilterCount(f: FilterState): number {
   ).length
 }
 
-/** Apply the user's manual position correction, if any. */
+/** Apply the user's manual corrections (Move fix, Edit field overrides), if any. */
 export function resolveBando(b: Bando, mark: UserMark | undefined): Bando {
-  if (!mark?.fix) return b
-  // L-EST97 coords would be stale after a move — drop them (hides the XGIS link).
-  return { ...b, lat: mark.fix.lat, lon: mark.fix.lon, lestX: undefined, lestY: undefined, geocode: 'manual' }
+  if (!mark?.fix && !mark?.edits) return b
+  let out = b
+  if (mark.edits) {
+    out = { ...out }
+    for (const [key, value] of Object.entries(mark.edits)) {
+      if (value != null) (out as unknown as Record<string, unknown>)[key] = value
+    }
+  }
+  if (mark.fix) {
+    // L-EST97 coords would be stale after a move — drop them (the detail view
+    // recomputes them from the fixed WGS84 position).
+    out = { ...out, lat: mark.fix.lat, lon: mark.fix.lon, lestX: undefined, lestY: undefined, geocode: 'manual' }
+  }
+  return out
 }
 
 export function placeToBando(p: CustomPlace): Bando {

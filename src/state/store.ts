@@ -8,7 +8,7 @@ interface AppState {
   scrapedAt?: string
   selectedId?: number
   baseLayer: BaseLayerId
-  toast?: string
+  toast?: { msg: string; action?: { label: string; onClick: () => void } }
   filters: FilterState
   filtersOpen: boolean
   /** Add-place flow: 'picking' = waiting for a map tap, coords = form open. */
@@ -24,7 +24,7 @@ interface AppState {
   setDataset: (d: BandoDataset) => void
   select: (id?: number) => void
   setBaseLayer: (l: BaseLayerId) => void
-  showToast: (msg: string) => void
+  showToast: (msg: string, action?: { label: string; onClick: () => void }) => void
   setFilters: (patch: Partial<FilterState>) => void
   resetFilters: () => void
   setFiltersOpen: (open: boolean) => void
@@ -41,15 +41,17 @@ export const useAppStore = create<AppState>((set) => ({
   bandos: [],
   baseLayer: (localStorage.getItem('bando-map:baseLayer') as BaseLayerId) || 'kaart',
   setDataset: (d) => set({ bandos: d.bandos, scrapedAt: d.scrapedAt }),
-  select: (id) => set({ selectedId: id }),
+  // Selecting a place also expands the mobile sheet, so the detail card shows.
+  select: (id) => set((s) => ({ selectedId: id, sheetOpen: id != null ? true : s.sheetOpen })),
   setBaseLayer: (l) => {
     localStorage.setItem('bando-map:baseLayer', l)
     set({ baseLayer: l })
   },
-  showToast: (msg) => {
+  showToast: (msg, action) => {
     clearTimeout(toastTimer)
-    toastTimer = setTimeout(() => set({ toast: undefined }), 3500)
-    set({ toast: msg })
+    // Toasts with an action (e.g. Undo) stick around a bit longer.
+    toastTimer = setTimeout(() => set({ toast: undefined }), action ? 6000 : 3500)
+    set({ toast: { msg, action } })
   },
   filters: DEFAULT_FILTERS,
   filtersOpen: false,

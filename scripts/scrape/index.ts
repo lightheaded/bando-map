@@ -48,7 +48,12 @@ async function buildCatalog(): Promise<CatalogRecord[]> {
   return [...records.values()].sort((a, b) => a.id - b.id)
 }
 
-async function readOverrides(): Promise<Record<string, { lat: number; lon: number; lestX?: number; lestY?: number }>> {
+/**
+ * Manual corrections collected in the app ("Copy fixes"): coordinates from the
+ * Move tool and/or register-field edits (name, address, period, usage,
+ * condition) from the Edit tool, keyed by register id.
+ */
+async function readOverrides(): Promise<Record<string, Partial<Bando>>> {
   try {
     return JSON.parse(await readFile('data/overrides.json', 'utf8'))
   } catch {
@@ -107,7 +112,13 @@ async function main() {
     const override = overrides[rec.id]
     if (override) {
       Object.assign(bando, override)
-      bando.geocode = 'manual'
+      // Only a coordinate override invalidates the geocode provenance (and the
+      // L-EST97 pair) — field edits (name, address, …) leave them intact.
+      if (override.lat != null || override.lon != null) {
+        bando.geocode = 'manual'
+        if (override.lestX == null) delete bando.lestX
+        if (override.lestY == null) delete bando.lestY
+      }
     }
     // Only records whose PDF is actually archived get a PDF link in the app —
     // a link to a missing object would hit the SPA fallback and open the map.

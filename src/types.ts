@@ -57,7 +57,22 @@ export interface UserMark {
   comment?: string
   /** Manually corrected position (the "Move" tool); overrides the dataset coordinates. */
   fix?: { lat: number; lon: number }
+  /**
+   * Manually corrected register fields (the "Edit" tool); overrides the dataset
+   * values. Kept as its own key so exports stay easy to merge back into
+   * data/overrides.json.
+   */
+  edits?: BandoEdits
   updatedAt: string
+}
+
+/** The register fields the in-app Edit tool can correct. */
+export interface BandoEdits {
+  name?: string
+  address?: string
+  period?: string
+  usage?: string
+  condition?: string
 }
 
 export type TriageStatus = 'new' | 'shortlisted' | 'rejected'
@@ -79,6 +94,7 @@ export interface UserData {
 
 export const USAGE_VALUES = ['ei kasutata', 'elumaja', 'kasutusel', 'koolimaja', 'sakraalhoone', 'tuletorn'] as const
 export const CONDITION_VALUES = ['halb', 'rahuldav', 'hea'] as const
+export const PERIOD_VALUES = ['tsaariaeg', 'vabariik', 'nõukogude'] as const
 
 /** The register data stays in Estonian; the UI displays English. */
 export const EN: Record<string, string> = {
@@ -97,20 +113,24 @@ export const EN: Record<string, string> = {
 }
 export const en = (value: string | undefined) => (value ? (EN[value] ?? value) : undefined)
 
-/** Small icons for the attribute pills. */
+/**
+ * Small icons for the attribute pills. The icon conveys what the pill *means*:
+ * a calendar for the dating period, the abandonment stage for usage, the
+ * structural state for condition.
+ */
 export const ICON: Record<string, string> = {
-  'ei kasutata': '🚫',
+  'ei kasutata': '🏚️',
   elumaja: '🏠',
-  kasutusel: '👥',
+  kasutusel: '✅',
   koolimaja: '🎓',
   sakraalhoone: '⛪',
   tuletorn: '🗼',
-  halb: '🧱',
+  halb: '⚠️',
   rahuldav: '🔧',
   hea: '✨',
-  tsaariaeg: '👑',
-  vabariik: '🏛️',
-  nõukogude: '🚩',
+  tsaariaeg: '📅',
+  vabariik: '📅',
+  nõukogude: '📅',
 }
 
 /** Archived register PDFs, served from the app's own CDN. */

@@ -1,5 +1,7 @@
 # Bando Map
 
+**Live at [bando.lagle.xyz](https://bando.lagle.xyz)** — every push to `main` deploys automatically.
+
 A full-screen map of abandoned buildings ("bandos") in Estonia — potential FPV drone flying spots.
 
 Data comes from the Estonian heritage register's [XX century architecture catalog](https://register.muinas.ee/public.php?menuID=architecture), filtered to buildings that are **not in use** (kasutus: ei kasutata) and in **poor condition** (seisukord: halb). Each spot links back to the register, Google Maps, and Maa-amet's [XGIS](https://xgis.maaamet.ee/xgis2/page/app/maainfo).
@@ -30,8 +32,8 @@ The pipeline (`scripts/scrape/`):
 
 1. Scrapes the **full catalog** (~1,950 records): one unfiltered search plus one search per usage/condition value to attribute those fields (the register's list view doesn't show them; searches POST to a PHP session, pagination reuses the cookie). Row counts are validated against the register's own "Kokku: N" totals.
 2. Marks **candidates** — records that are unused (*ei kasutata*) or in poor condition (*halb*).
-3. Geocodes candidates with Maa-amet's free [In-ADS gazetteer](https://inaadress.maaamet.ee/) — no API key. Every point carries a `geocode` precision flag (`building` / `street` / `village`), since some register addresses are only village-level.
-4. Applies manual coordinate fixes from `data/overrides.json` (`geocode: "manual"` — wins over everything). Cross-referencing the official monument register was tried and dropped: the two catalogs name buildings too differently for reliable matching.
+3. Geocodes candidates with Maa-amet's free [In-ADS gazetteer](https://inaadress.maaamet.ee/) — no API key. Register addresses predate the administrative reforms, so queries retry with settlement-type words stripped (e.g. *Ilmatsalu alevik* is now a *küla* — the stale type word makes In-ADS return nothing). Every point carries a `geocode` precision flag (`building` / `street` / `village`), since some register addresses are only village-level.
+4. Applies manual corrections from `data/overrides.json` — coordinates from the app's Move tool (`geocode: "manual"`) and register-field edits from the Edit tool; wins over everything. Cross-referencing the official monument register was tried and dropped: the two catalogs name buildings too differently for reliable matching.
 5. Downloads one photo per candidate and stores a 480px webp in `public/thumbs/` (local thumbnails keep the map fast and are a step toward full offline use).
 6. Writes `public/data/bandos.json` (geocoded candidates, used by the app) and `data/catalog.json` (everything).
 
@@ -44,10 +46,13 @@ Everything is disk-cached under `data/cache/` (gitignored) — delete it for a f
 - All user state lives in the browser's localStorage, exportable/importable as JSON. No backend, no accounts, no tracking.
 - **Workflow**: triage spots online — *Shortlist* the promising ones, *Reject* the duds (hidden by default, recoverable via filters) — then mark them *Visited* in the field and rate 1–5 stars with notes. Marker colors: red = new, blue = shortlisted, green = visited, gray = rejected.
 - **Custom places**: add your own spots (name + notes, no photos) straight onto the map; they live in localStorage and ride along in exports.
+- **Corrections**: the *Move* tool repositions a wrong pin (with undo), the *Edit* tool corrects register fields (name, address, era, usage, condition). Corrections are stored as their own keys in the export, and *Copy fixes* in the filter panel emits them as ready-to-paste `data/overrides.json` content, so they flow back into the shared dataset on the next scrape.
 - **Deep links**: selecting a spot puts `#b/<id>@<lat>,<lon>` in the URL — share it, and if the receiver doesn't have that spot, the map zooms to the coordinates instead.
 - `src/types.ts` is the single schema shared by the app and the scraper.
 
 ## Roadmap
+
+Work is tracked on the [Bando Map project board](https://github.com/users/lightheaded/projects/2).
 
 - [x] **Phase 0 — POC**: scrape the ~116 unused/poor-condition buildings, geocode, show clustered on the map with photos and detail panel
 - [x] **Phase 1 — Full data pipeline**: all catalog records with usage/condition attribution, local thumbnails, manual coordinate overrides
