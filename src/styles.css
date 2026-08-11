@@ -396,6 +396,11 @@ fieldset legend {
   color: #444;
 }
 
+.chip-icon {
+  margin-right: 4px;
+  font-size: 11px;
+}
+
 .chip-bad {
   background: #fee2e2;
   color: #b91c1c;

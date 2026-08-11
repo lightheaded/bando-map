@@ -17,10 +17,10 @@ export interface Bando {
   lestX?: number
   lestY?: number
   /**
-   * How the coordinate was obtained — building/manual are exact,
-   * street and village are approximate centroids.
+   * How the coordinate was obtained — register (from the record's PDF),
+   * building and manual are exact; street and village are approximate centroids.
    */
-  geocode: 'building' | 'street' | 'village' | 'manual'
+  geocode: 'register' | 'building' | 'street' | 'village' | 'manual'
   /** Photo ids under register.muinas.ee/content/architecture/regular/<photoId>.jpg */
   photos: number[]
   /** True for user-added places (kept in localStorage, not in the dataset). */
@@ -92,6 +92,25 @@ export const EN: Record<string, string> = {
   nõukogude: 'Soviet era',
 }
 export const en = (value: string | undefined) => (value ? (EN[value] ?? value) : undefined)
+
+/** Small icons for the attribute pills. */
+export const ICON: Record<string, string> = {
+  'ei kasutata': '🚫',
+  elumaja: '🏠',
+  kasutusel: '👥',
+  koolimaja: '🎓',
+  sakraalhoone: '⛪',
+  tuletorn: '🗼',
+  halb: '🧱',
+  rahuldav: '🔧',
+  hea: '✨',
+  tsaariaeg: '👑',
+  vabariik: '🏛️',
+  nõukogude: '🚩',
+}
+
+/** Archived register PDFs, served from the app's own CDN. */
+export const PDF_URL = (id: number) => `https://bando.toom.as/pdfs/${id}.pdf`
 
 export const MUINAS_DETAIL_URL = (id: number) =>
   `https://register.muinas.ee/public.php?menuID=architecture&action=view&id=${id}`

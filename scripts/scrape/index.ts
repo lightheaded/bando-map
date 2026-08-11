@@ -17,6 +17,7 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { searchArchitecture, USAGE, CONDITION, type ArchitectureRow } from './muinas.ts'
 import { geocode, type GeocodeResult } from './geocode.ts'
 import { ensureThumb } from './thumbs.ts'
+import { pdfCoords } from './pdfs.ts'
 import { cachedJson } from './cache.ts'
 import type { Bando, BandoDataset } from '../../src/types.ts'
 
@@ -76,12 +77,17 @@ async function main() {
   const failures: string[] = []
   const overrides = await readOverrides()
 
+  let fromPdf = 0
   for (const rec of candidates) {
     const geo = geocoded.get(rec.id)
-    if (!geo) {
+    // The register PDF carries exact L-EST97 coordinates — prefer it over geocoding.
+    const pdf = await pdfCoords(rec.id)
+    if (!geo && !pdf) {
       failures.push(`${rec.id} ${rec.name} — ${rec.address}, ${rec.municipality}`)
       continue
     }
+    if (pdf) fromPdf++
+    const coords = pdf ?? geo!
     const bando: Bando = {
       id: rec.id,
       name: rec.name,
@@ -91,11 +97,11 @@ async function main() {
       period: rec.period,
       usage: rec.usage,
       condition: rec.condition,
-      lat: geo.lat,
-      lon: geo.lon,
-      lestX: geo.lestX,
-      lestY: geo.lestY,
-      geocode: geo.precision,
+      lat: coords.lat,
+      lon: coords.lon,
+      lestX: coords.lestX,
+      lestY: coords.lestY,
+      geocode: pdf ? 'register' : geo!.precision,
       photos: rec.photos,
     }
     const override = overrides[rec.id]
@@ -123,7 +129,7 @@ async function main() {
   await writeFile('data/catalog.json', JSON.stringify({ scrapedAt: dataset.scrapedAt, records: catalog }, null, 1))
 
   console.log(`\nWrote public/data/bandos.json: ${bandos.length} bandos`)
-  console.log(`Geocode precision:`, precisionCounts)
+  console.log(`Geocode precision (In-ADS):`, precisionCounts, `— ${fromPdf} upgraded to exact register-PDF coordinates`)
   console.log(`Full catalog in data/catalog.json: ${catalog.length} records`)
   if (failures.length) {
     console.log(`\n${failures.length} candidates could not be geocoded (add to data/overrides.json):`)
