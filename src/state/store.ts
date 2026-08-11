@@ -7,10 +7,14 @@ interface AppState {
   scrapedAt?: string
   selectedId?: number
   baseLayer: BaseLayerId
+  toast?: string
   setDataset: (d: BandoDataset) => void
   select: (id?: number) => void
   setBaseLayer: (l: BaseLayerId) => void
+  showToast: (msg: string) => void
 }
+
+let toastTimer: ReturnType<typeof setTimeout> | undefined
 
 export const useAppStore = create<AppState>((set) => ({
   bandos: [],
@@ -20,5 +24,10 @@ export const useAppStore = create<AppState>((set) => ({
   setBaseLayer: (l) => {
     localStorage.setItem('bando-map:baseLayer', l)
     set({ baseLayer: l })
+  },
+  showToast: (msg) => {
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => set({ toast: undefined }), 3500)
+    set({ toast: msg })
   },
 }))

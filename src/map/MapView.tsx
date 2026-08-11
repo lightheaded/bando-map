@@ -26,6 +26,7 @@ export function MapView() {
   const bandos = useAppStore((s) => s.bandos)
   const baseLayer = useAppStore((s) => s.baseLayer)
   const select = useAppStore((s) => s.select)
+  const selectedId = useAppStore((s) => s.selectedId)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -40,10 +41,14 @@ export function MapView() {
     if (import.meta.env.DEV) (window as unknown as { __map: maplibregl.Map }).__map = map
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
-    map.addControl(
-      new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true }),
-      'top-right',
+    const geolocate = new maplibregl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: true,
+    })
+    geolocate.on('error', () =>
+      useAppStore.getState().showToast('Location unavailable — check location permissions for this browser'),
     )
+    map.addControl(geolocate, 'top-right')
 
     map.on('load', () => {
       map.addSource('bandos', {
@@ -90,6 +95,18 @@ export function MapView() {
           'circle-stroke-color': '#fff',
         },
       })
+      map.addLayer({
+        id: 'bando-selected',
+        type: 'circle',
+        source: 'bandos',
+        filter: ['==', ['get', 'id'], -1],
+        paint: {
+          'circle-color': '#e11d48',
+          'circle-radius': 11,
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#fbbf24',
+        },
+      })
 
       map.on('click', 'clusters', async (e) => {
         const feature = map.queryRenderedFeatures(e.point, { layers: ['clusters'] })[0]
@@ -99,10 +116,7 @@ export function MapView() {
       })
       map.on('click', 'bando-point', (e) => {
         const id = e.features?.[0]?.properties?.id
-        if (id != null) {
-          select(Number(id))
-          map.easeTo({ center: (e.features![0].geometry as Point).coordinates as [number, number] })
-        }
+        if (id != null) select(Number(id))
       })
       map.on('click', (e) => {
         const hits = map.queryRenderedFeatures(e.point, { layers: ['clusters', 'bando-point'] })
@@ -131,6 +145,31 @@ export function MapView() {
     if (map.isStyleLoaded()) applyBaseLayer(map, baseLayer)
     else map.once('load', () => applyBaseLayer(map, baseLayer))
   }, [baseLayer])
+
+  // Center the selected bando in the map area the detail panel leaves visible:
+  // bottom sheet on mobile, right-docked panel on desktop.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const run = () => {
+      map.setFilter('bando-selected', ['==', ['get', 'id'], selectedId ?? -1])
+      const bando = useAppStore.getState().bandos.find((b) => b.id === selectedId)
+      if (bando) {
+        const isMobile = window.matchMedia('(max-width: 640px)').matches
+        map.easeTo({
+          center: [bando.lon, bando.lat],
+          padding: isMobile
+            ? { top: 0, left: 0, right: 0, bottom: Math.round(window.innerHeight * 0.5) }
+            : { top: 0, left: 0, bottom: 0, right: 400 },
+          duration: 500,
+        })
+      } else {
+        map.easeTo({ padding: { top: 0, left: 0, right: 0, bottom: 0 }, duration: 300 })
+      }
+    }
+    if (map.isStyleLoaded()) run()
+    else map.once('load', run)
+  }, [selectedId])
 
   return <div ref={containerRef} className="map-container" />
 }
