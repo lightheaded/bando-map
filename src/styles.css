@@ -754,23 +754,34 @@ fieldset legend {
   border-top: 1px solid #f0eef0;
 }
 
+/* Icon over label, so five tabs fit the 380px dock and phone widths alike;
+   badges float at the icon's corner instead of widening the button. */
 .sidebar-tabs button {
   position: relative;
   flex: 1;
+  min-width: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 3px;
   border: none;
   background: none;
-  padding: 10px 4px calc(10px + env(safe-area-inset-bottom, 0px) / 2);
-  font-size: 12px;
+  padding: 8px 2px calc(8px + env(safe-area-inset-bottom, 0px) / 2);
+  font-size: 10.5px;
   font-weight: 500;
   color: #555;
   cursor: pointer;
   transition:
     background 0.15s,
     color 0.15s;
+}
+
+.sidebar-tabs .tab-badge,
+.sidebar-tabs .offline-dot {
+  position: absolute;
+  top: 3px;
+  left: calc(50% + 5px);
 }
 
 .sidebar-tabs button:hover {
