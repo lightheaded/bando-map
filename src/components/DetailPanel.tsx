@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
+import { MapPinIcon } from './icons'
 import { placeToBando, resolveBando } from '../state/filters'
 import { wgs84ToLest97 } from '../geo/lest97'
 import {
@@ -13,11 +14,32 @@ import {
   PHOTO_URL,
   PDF_URL,
   GMAPS_URL,
-  GMAPS_DIRECTIONS_URL,
   XGIS_URL,
   type Bando,
   type BandoEdits,
 } from '../types'
+
+/** The triage buttons are toggles — the checkbox says so at a glance. */
+function ToggleButton({
+  checked,
+  activeClass,
+  title,
+  onClick,
+  children,
+}: {
+  checked: boolean
+  activeClass: string
+  title: string
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button className={`btn toggle-btn ${checked ? activeClass : ''}`} title={title} aria-pressed={checked} onClick={onClick}>
+      <input type="checkbox" checked={checked} readOnly tabIndex={-1} aria-hidden="true" />
+      {children}
+    </button>
+  )
+}
 
 function Chip({ value, className }: { value: string; className?: string }) {
   return (
@@ -145,12 +167,10 @@ export function DetailContent() {
   const mark = useMarksStore((s) => (selectedId != null ? s.marks[selectedId] : undefined))
   const setMark = useMarksStore((s) => s.setMark)
   const removePlace = useMarksStore((s) => s.removePlace)
-  const [copied, setCopied] = useState(false)
   const [comment, setComment] = useState('')
   const [editing, setEditing] = useState(false)
 
   useEffect(() => {
-    setCopied(false)
     setEditing(false)
     setComment(selectedId != null ? (useMarksStore.getState().marks[selectedId]?.comment ?? '') : '')
   }, [selectedId])
@@ -165,22 +185,21 @@ export function DetailContent() {
   // project them from WGS84 so the XGIS link always works.
   const lest =
     item.lestX != null && item.lestY != null ? { x: item.lestX, y: item.lestY } : wgs84ToLest97(item.lat, item.lon)
-  const copyCoords = async () => {
-    try {
-      await navigator.clipboard.writeText(coords)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    } catch {
-      showToast('Could not access the clipboard')
-    }
-  }
 
   const setStatus = (next: 'shortlisted' | 'rejected') => {
+    const previous = status
     const value = status === next ? undefined : next
-    setMark(item.id, { status: value })
+    const id = item.id
+    setMark(id, { status: value })
     if (value === 'rejected' && !statusFilter.includes('rejected')) {
       select(undefined)
-      showToast('Rejected — tick "Rejected" in filters to review discarded spots')
+      showToast('Rejected — hidden from the map', {
+        label: 'Undo',
+        onClick: () => {
+          setMark(id, { status: previous })
+          select(id)
+        },
+      })
     }
   }
 
@@ -196,6 +215,16 @@ export function DetailContent() {
           onClick={() => setEditing(!editing)}
         >
           {editing ? 'Cancel' : '✎ Edit'}
+        </button>
+        <button
+          className="btn btn-small move-btn"
+          title="Correct this pin's position: click, then tap the map at the right spot"
+          onClick={() => {
+            useAppStore.getState().setMoveTarget(item.id)
+            showToast('Tap the map at the correct location')
+          }}
+        >
+          <MapPinIcon /> Move
         </button>
       </div>
       {editing ? (
@@ -241,19 +270,6 @@ export function DetailContent() {
       )}
       <div className="coords-row">
         <code>{coords}</code>
-        <button className={`btn btn-small ${copied ? 'btn-success' : ''}`} onClick={copyCoords}>
-          {copied ? 'Copied ✓' : 'Copy'}
-        </button>
-        <button
-          className="btn btn-small"
-          title="Correct this pin's position: click, then tap the map at the right spot"
-          onClick={() => {
-            useAppStore.getState().setMoveTarget(item.id)
-            showToast('Tap the map at the correct location')
-          }}
-        >
-          Move
-        </button>
         {mark?.fix && (
           <button className="btn btn-small btn-muted" onClick={() => setMark(item.id, { fix: undefined })}>
             Reset pin
@@ -261,22 +277,25 @@ export function DetailContent() {
         )}
       </div>
       <div className="mark-actions">
-        <button
-          className={`btn ${status === 'shortlisted' ? 'btn-shortlisted' : ''}`}
+        <ToggleButton
+          checked={status === 'shortlisted'}
+          activeClass="btn-shortlisted"
           title="Looks worth a visit"
           onClick={() => setStatus('shortlisted')}
         >
-          {status === 'shortlisted' ? '♥ Shortlisted' : 'Shortlist'}
-        </button>
-        <button
-          className={`btn ${status === 'rejected' ? 'btn-rejected' : ''}`}
+          ♥ Shortlisted
+        </ToggleButton>
+        <ToggleButton
+          checked={status === 'rejected'}
+          activeClass="btn-rejected"
           title="Not a usable spot — hide it"
           onClick={() => setStatus('rejected')}
         >
-          {status === 'rejected' ? '✕ Rejected' : 'Reject'}
-        </button>
-        <button
-          className={`btn ${mark?.visited ? 'btn-visited' : ''}`}
+          ✕ Rejected
+        </ToggleButton>
+        <ToggleButton
+          checked={!!mark?.visited}
+          activeClass="btn-visited"
           title="You were physically there"
           onClick={() =>
             setMark(item.id, {
@@ -285,8 +304,8 @@ export function DetailContent() {
             })
           }
         >
-          {mark?.visited ? '⚑ Visited' : 'Visited?'}
-        </button>
+          ⚑ Visited
+        </ToggleButton>
         {mark?.visited && (
           <input
             type="date"
@@ -353,9 +372,6 @@ export function DetailContent() {
             PDF
           </a>
         )}
-        <a className="btn btn-primary" href={GMAPS_DIRECTIONS_URL(item.lat, item.lon)} target="_blank" rel="noreferrer">
-          Directions
-        </a>
         <button
           className="btn"
           onClick={async () => {
