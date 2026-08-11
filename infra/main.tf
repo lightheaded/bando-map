@@ -36,9 +36,22 @@ variable "github_oidc_sub" {
   default     = "repo:lightheaded@3413870/bando-map@1330907098:ref:refs/heads/main"
 }
 
+# Stamped on every taggable resource via default_tags; per-resource tags add
+# Component (site | sync) so Cost Explorer can split hosting from the backend.
+locals {
+  tags = {
+    Project   = "bando-map"
+    ManagedBy = "terraform"
+  }
+}
+
 provider "aws" {
   region  = "eu-north-1"
   profile = var.aws_profile
+
+  default_tags {
+    tags = local.tags
+  }
 }
 
 # CloudFront certificates must live in us-east-1.
@@ -46,6 +59,10 @@ provider "aws" {
   alias   = "us_east_1"
   region  = "us-east-1"
   profile = var.aws_profile
+
+  default_tags {
+    tags = local.tags
+  }
 }
 
 data "aws_route53_zone" "main" {
@@ -56,6 +73,7 @@ data "aws_route53_zone" "main" {
 
 resource "aws_s3_bucket" "site" {
   bucket = var.domain
+  tags   = { Component = "site" }
 }
 
 resource "aws_s3_bucket_public_access_block" "site" {
@@ -89,6 +107,7 @@ resource "aws_acm_certificate" "site" {
   provider          = aws.us_east_1
   domain_name       = var.domain
   validation_method = "DNS"
+  tags              = { Component = "site" }
 
   lifecycle {
     create_before_destroy = true
@@ -133,6 +152,7 @@ resource "aws_cloudfront_distribution" "site" {
   aliases             = [var.domain]
   price_class         = "PriceClass_100"
   http_version        = "http2and3"
+  tags                = { Component = "site" }
 
   origin {
     domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
@@ -264,6 +284,22 @@ variable "alert_email" {
 variable "budget_limit_usd" {
   type    = number
   default = 15
+}
+
+# Tags only show up in Cost Explorer once activated as cost-allocation tags.
+# AWS lists a tag key for activation only after billing has seen it on a
+# resource (up to 24h after the tagging apply), so this is opt-in: flip it on
+# in a later apply once the keys appear, or activate them once by hand in
+# Billing → Cost allocation tags.
+variable "activate_cost_allocation_tags" {
+  type    = bool
+  default = false
+}
+
+resource "aws_ce_cost_allocation_tag" "keys" {
+  for_each = var.activate_cost_allocation_tags ? toset(["Project", "Component"]) : toset([])
+  tag_key  = each.value
+  status   = "Active"
 }
 
 resource "aws_budgets_budget" "monthly" {
