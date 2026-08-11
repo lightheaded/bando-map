@@ -13,7 +13,7 @@
  * Reruns are cheap: raw results, geocodes, monuments and thumbnails are all
  * cached on disk. Delete data/cache/ (and public/thumbs/) for a fresh run.
  */
-import { mkdir, writeFile, readFile } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, access } from 'node:fs/promises'
 import { searchArchitecture, USAGE, CONDITION, type ArchitectureRow } from './muinas.ts'
 import { geocode, type GeocodeResult } from './geocode.ts'
 import { ensureThumb } from './thumbs.ts'
@@ -109,6 +109,9 @@ async function main() {
       Object.assign(bando, override)
       bando.geocode = 'manual'
     }
+    // Only records whose PDF is actually archived get a PDF link in the app —
+    // a link to a missing object would hit the SPA fallback and open the map.
+    bando.pdf = (await access(`data/pdfs/${rec.id}.pdf`).then(() => true, () => false)) || undefined
     if (rec.photos.length > 0) {
       bando.thumbs = []
       for (const [i, photoId] of rec.photos.entries()) {

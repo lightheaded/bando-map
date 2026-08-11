@@ -5,7 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import { mapStyle, applyBaseLayer } from './layers'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
-import { useFilteredBandos } from '../state/filters'
+import { useFilteredBandos, resolveBando } from '../state/filters'
 import type { Bando, UserMark } from '../types'
 
 const ESTONIA_BOUNDS: [number, number, number, number] = [21.5, 57.4, 28.3, 59.8]
@@ -70,6 +70,7 @@ export function MapView() {
   const selectedId = useAppStore((s) => s.selectedId)
   const filters = useAppStore((s) => s.filters)
   const placeDraft = useAppStore((s) => s.placeDraft)
+  const moveTarget = useAppStore((s) => s.moveTarget)
   const pendingView = useAppStore((s) => s.pendingView)
 
   useEffect(() => {
@@ -168,19 +169,28 @@ export function MapView() {
       })
 
       map.on('click', 'clusters', async (e) => {
-        if (useAppStore.getState().placeDraft) return
+        const state = useAppStore.getState()
+        if (state.placeDraft || state.moveTarget != null) return
         const feature = map.queryRenderedFeatures(e.point, { layers: ['clusters'] })[0]
         const source = map.getSource('bandos') as maplibregl.GeoJSONSource
         const zoom = await source.getClusterExpansionZoom(feature.properties.cluster_id)
         map.easeTo({ center: (feature.geometry as Point).coordinates as [number, number], zoom })
       })
       map.on('click', 'bando-point', (e) => {
-        if (useAppStore.getState().placeDraft) return
+        const state = useAppStore.getState()
+        if (state.placeDraft || state.moveTarget != null) return
         const id = e.features?.[0]?.properties?.id
         if (id != null) select(Number(id))
       })
       map.on('click', (e) => {
         const state = useAppStore.getState()
+        // Move tool: the next tap is the corrected position.
+        if (state.moveTarget != null) {
+          useMarksStore.getState().setMark(state.moveTarget, { fix: { lat: e.lngLat.lat, lon: e.lngLat.lng } })
+          state.setMoveTarget(undefined)
+          state.showToast('Position corrected — use "Copy fixes" in filters to feed it back to the dataset')
+          return
+        }
         // Add-place mode: the next tap picks the location.
         if (state.placeDraft === 'picking') {
           state.setPlaceDraft({ lat: e.lngLat.lat, lon: e.lngLat.lng })
@@ -222,10 +232,11 @@ export function MapView() {
     if (!map || !sourceReady) return
     map.setFilter('bando-selected', ['==', ['get', 'id'], selectedId ?? -0.5])
     // Look in the full dataset, not the filtered view — deep links may point at
-    // a bando the current filters exclude.
-    const bando =
+    // a bando the current filters exclude. Apply any manual position fix.
+    const raw =
       useAppStore.getState().bandos.find((b) => b.id === selectedId) ??
       useMarksStore.getState().places.find((p) => p.id === selectedId)
+    const bando = raw && resolveBando(raw as Bando, useMarksStore.getState().marks[selectedId!])
     if (bando) {
       map.easeTo({
         center: [bando.lon, bando.lat],
@@ -280,5 +291,10 @@ export function MapView() {
     useAppStore.getState().setPendingView(undefined)
   }, [pendingView, sourceReady])
 
-  return <div ref={containerRef} className={`map-container ${placeDraft === 'picking' ? 'picking' : ''}`} />
+  return (
+    <div
+      ref={containerRef}
+      className={`map-container ${placeDraft === 'picking' || moveTarget != null ? 'picking' : ''}`}
+    />
+  )
 }

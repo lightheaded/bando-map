@@ -30,6 +30,8 @@ function applyHash(hash: string) {
 export function useDeepLink() {
   const bandos = useAppStore((s) => s.bandos)
   const selectedId = useAppStore((s) => s.selectedId)
+  // Re-write the hash when the selected pin is moved with the Move tool.
+  const fix = useMarksStore((s) => (selectedId != null ? s.marks[selectedId]?.fix : undefined))
   const ready = useRef(false)
 
   // The listener lives for the whole app lifetime — attaching it inside the
@@ -51,13 +53,14 @@ export function useDeepLink() {
   // Keep the URL shareable: selection writes the hash, deselection clears it.
   useEffect(() => {
     if (!ready.current) return
-    const item =
+    const raw =
       useAppStore.getState().bandos.find((b) => b.id === selectedId) ??
       useMarksStore.getState().places.find((p) => p.id === selectedId)
+    const item = raw && fix ? { ...raw, lat: fix.lat, lon: fix.lon } : raw
     if (item) {
       history.replaceState(null, '', `#b/${item.id}@${item.lat.toFixed(6)},${item.lon.toFixed(6)}`)
     } else {
       history.replaceState(null, '', location.pathname + location.search)
     }
-  }, [selectedId])
+  }, [selectedId, fix])
 }

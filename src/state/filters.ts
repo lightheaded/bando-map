@@ -52,6 +52,13 @@ export function activeFilterCount(f: FilterState): number {
   ).length
 }
 
+/** Apply the user's manual position correction, if any. */
+export function resolveBando(b: Bando, mark: UserMark | undefined): Bando {
+  if (!mark?.fix) return b
+  // L-EST97 coords would be stale after a move — drop them (hides the XGIS link).
+  return { ...b, lat: mark.fix.lat, lon: mark.fix.lon, lestX: undefined, lestY: undefined, geocode: 'manual' }
+}
+
 export function placeToBando(p: CustomPlace): Bando {
   return {
     id: p.id,
@@ -74,7 +81,10 @@ export function useFilteredBandos(): Bando[] {
   const marks = useMarksStore((s) => s.marks)
   const places = useMarksStore((s) => s.places)
   return useMemo(
-    () => [...bandos, ...places.map(placeToBando)].filter((b) => matchesFilters(b, filters, marks[b.id])),
+    () =>
+      [...bandos, ...places.map(placeToBando)]
+        .map((b) => resolveBando(b, marks[b.id]))
+        .filter((b) => matchesFilters(b, filters, marks[b.id])),
     [bandos, places, filters, marks],
   )
 }
