@@ -15,6 +15,7 @@ resource "aws_dynamodb_table" "sync" {
   name         = "bando-map-sync"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "pk"
+  tags         = { Component = "sync" }
 
   attribute {
     name = "pk"
@@ -65,6 +66,7 @@ resource "aws_iam_role_policy" "sync_lambda" {
 resource "aws_cloudwatch_log_group" "sync_lambda" {
   name              = "/aws/lambda/bando-map-sync"
   retention_in_days = 14
+  tags              = { Component = "sync" }
 }
 
 resource "aws_lambda_function" "sync" {
@@ -77,6 +79,7 @@ resource "aws_lambda_function" "sync" {
   source_code_hash = data.archive_file.sync_handler.output_base64sha256
   memory_size      = 256
   timeout          = 10
+  tags             = { Component = "sync" }
 
   environment {
     variables = { TABLE_NAME = aws_dynamodb_table.sync.name }
@@ -93,6 +96,7 @@ resource "aws_cognito_user_pool" "users" {
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
   deletion_protection      = "ACTIVE"
+  tags                     = { Component = "sync" }
 
   password_policy {
     minimum_length    = 10
@@ -149,6 +153,7 @@ resource "aws_cognito_user_pool_client" "spa" {
 resource "aws_apigatewayv2_api" "sync" {
   name          = "bando-map-sync"
   protocol_type = "HTTP"
+  tags          = { Component = "sync" }
 
   cors_configuration {
     allow_origins = ["https://bando.lagle.xyz", "http://localhost:5173"]
@@ -197,6 +202,7 @@ resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.sync.id
   name        = "$default"
   auto_deploy = true
+  tags        = { Component = "sync" }
 
   default_route_settings {
     # Backstop against abuse — far above anything 5 users generate.
@@ -218,6 +224,7 @@ resource "aws_lambda_permission" "apigw" {
 resource "aws_acm_certificate" "api" {
   domain_name       = var.api_domain
   validation_method = "DNS"
+  tags              = { Component = "sync" }
 
   lifecycle {
     create_before_destroy = true
@@ -246,6 +253,7 @@ resource "aws_acm_certificate_validation" "api" {
 
 resource "aws_apigatewayv2_domain_name" "api" {
   domain_name = var.api_domain
+  tags        = { Component = "sync" }
 
   domain_name_configuration {
     certificate_arn = aws_acm_certificate_validation.api.certificate_arn
