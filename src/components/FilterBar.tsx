@@ -21,15 +21,24 @@ function toggle<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
 }
 
-/** Copies moved pins as a data/overrides.json snippet, so fixes can flow back into the dataset. */
+/**
+ * Copies moved pins and field edits as a data/overrides.json snippet, so
+ * corrections can flow back into the dataset.
+ */
 function CopyFixesButton() {
   const marks = useMarksStore((s) => s.marks)
   const showToast = useAppStore((s) => s.showToast)
-  const fixes = Object.entries(marks).filter(([id, m]) => m.fix && Number(id) > 0)
+  const fixes = Object.entries(marks).filter(([id, m]) => (m.fix || m.edits) && Number(id) > 0)
   if (!fixes.length) return null
   const copy = async () => {
     const overrides = Object.fromEntries(
-      fixes.map(([id, m]) => [id, { lat: Number(m.fix!.lat.toFixed(6)), lon: Number(m.fix!.lon.toFixed(6)) }]),
+      fixes.map(([id, m]) => [
+        id,
+        {
+          ...(m.fix ? { lat: Number(m.fix.lat.toFixed(6)), lon: Number(m.fix.lon.toFixed(6)) } : {}),
+          ...m.edits,
+        },
+      ]),
     )
     try {
       await navigator.clipboard.writeText(JSON.stringify(overrides, null, 2))
@@ -39,7 +48,7 @@ function CopyFixesButton() {
     }
   }
   return (
-    <button className="btn btn-small" onClick={copy} title="Copy moved pins as data/overrides.json content">
+    <button className="btn btn-small" onClick={copy} title="Copy moved pins and edits as data/overrides.json content">
       Copy fixes ({fixes.length})
     </button>
   )

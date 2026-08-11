@@ -83,7 +83,13 @@ export function MapView() {
         ? { center: restored.center, zoom: restored.zoom }
         : { bounds: ESTONIA_BOUNDS, fitBoundsOptions: { padding: 20 } }),
       attributionControl: { compact: true },
+      // North up, always — no rotation or tilt.
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false,
     })
+    map.touchZoomRotate.disableRotation()
+    map.keyboard.disableRotation()
     mapRef.current = map
     if (import.meta.env.DEV) (window as unknown as { __map: maplibregl.Map }).__map = map
 
@@ -186,9 +192,14 @@ export function MapView() {
         const state = useAppStore.getState()
         // Move tool: the next tap is the corrected position.
         if (state.moveTarget != null) {
-          useMarksStore.getState().setMark(state.moveTarget, { fix: { lat: e.lngLat.lat, lon: e.lngLat.lng } })
+          const id = state.moveTarget
+          const previousFix = useMarksStore.getState().marks[id]?.fix
+          useMarksStore.getState().setMark(id, { fix: { lat: e.lngLat.lat, lon: e.lngLat.lng } })
           state.setMoveTarget(undefined)
-          state.showToast('Position corrected — use "Copy fixes" in filters to feed it back to the dataset')
+          state.showToast('Position corrected', {
+            label: 'Undo',
+            onClick: () => useMarksStore.getState().setMark(id, { fix: previousFix }),
+          })
           return
         }
         // Add-place mode: the next tap picks the location.

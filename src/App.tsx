@@ -35,7 +35,18 @@ function Toast() {
   if (!toast) return null
   return (
     <div className="toast" role="status">
-      {toast}
+      {toast.msg}
+      {toast.action && (
+        <button
+          className="toast-action"
+          onClick={() => {
+            toast.action!.onClick()
+            useAppStore.setState({ toast: undefined })
+          }}
+        >
+          {toast.action.label}
+        </button>
+      )}
     </div>
   )
 }

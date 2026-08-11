@@ -56,7 +56,7 @@ body,
     bottom: 0;
     width: 100%;
     border-radius: 16px 16px 0 0;
-    height: 52px;
+    height: calc(56px + env(safe-area-inset-bottom, 0px));
     transition: height 0.25s ease-out;
   }
 
@@ -64,16 +64,24 @@ body,
     height: 62%;
   }
 
+  /* While the finger drags the sheet, its height follows without easing. */
+  .sidebar.dragging {
+    transition: none;
+  }
+
   .sheet-handle {
     display: block;
     border: none;
     background: transparent;
-    padding: 6px 0 8px;
+    padding: 8px 16px 10px;
     font-size: 13px;
     font-weight: 500;
     color: #444;
     cursor: pointer;
     flex-shrink: 0;
+    width: 100%;
+    /* The sheet drags via JS touch handlers — don't let the browser scroll. */
+    touch-action: none;
   }
 
   .sheet-handle .grabber {
@@ -82,7 +90,14 @@ body,
     height: 4px;
     border-radius: 2px;
     background: #d4d4d8;
-    margin: 0 auto 6px;
+    margin: 0 auto 7px;
+  }
+
+  .sheet-label {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -366,8 +381,51 @@ fieldset legend {
   padding: 12px;
 }
 
-.detail-panel .back {
+.detail-topbar {
+  display: flex;
+  justify-content: space-between;
   margin-bottom: 8px;
+}
+
+/* ============ Edit form ============ */
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.edit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: #666;
+}
+
+.edit-form input,
+.edit-form select {
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  color: #333;
+}
+
+.edit-selects {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-selects label {
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-selects select {
+  width: 100%;
 }
 
 .detail-panel h2 {
@@ -665,6 +723,23 @@ fieldset legend {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
   max-width: min(90vw, 420px);
   text-align: center;
+}
+
+.toast-action {
+  border: none;
+  background: transparent;
+  color: #fbbf24;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 12px;
+  padding: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.toast-action:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 640px) {

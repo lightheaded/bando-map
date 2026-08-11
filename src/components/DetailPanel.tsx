@@ -2,7 +2,22 @@ import { useEffect, useState } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { placeToBando, resolveBando } from '../state/filters'
-import { en, ICON, MUINAS_DETAIL_URL, PHOTO_URL, PDF_URL, GMAPS_URL, GMAPS_DIRECTIONS_URL, XGIS_URL } from '../types'
+import { wgs84ToLest97 } from '../geo/lest97'
+import {
+  en,
+  ICON,
+  PERIOD_VALUES,
+  USAGE_VALUES,
+  CONDITION_VALUES,
+  MUINAS_DETAIL_URL,
+  PHOTO_URL,
+  PDF_URL,
+  GMAPS_URL,
+  GMAPS_DIRECTIONS_URL,
+  XGIS_URL,
+  type Bando,
+  type BandoEdits,
+} from '../types'
 
 function Chip({ value, className }: { value: string; className?: string }) {
   return (
@@ -10,6 +25,113 @@ function Chip({ value, className }: { value: string; className?: string }) {
       {ICON[value] && <span className="chip-icon">{ICON[value]}</span>}
       {en(value)}
     </span>
+  )
+}
+
+/**
+ * Corrects the register fields in place. Only the fields that differ from the
+ * dataset are stored (as `mark.edits`), so exports stay easy to merge back
+ * into data/overrides.json. Custom places just get their name updated.
+ */
+function EditForm({ raw, item, onClose }: { raw: Bando; item: Bando; onClose: () => void }) {
+  const setMark = useMarksStore((s) => s.setMark)
+  const updatePlace = useMarksStore((s) => s.updatePlace)
+  const showToast = useAppStore((s) => s.showToast)
+  const hasEdits = useMarksStore((s) => !!s.marks[item.id]?.edits)
+  const [draft, setDraft] = useState<Required<BandoEdits>>({
+    name: item.name,
+    address: item.address,
+    period: item.period ?? '',
+    usage: item.usage ?? '',
+    condition: item.condition ?? '',
+  })
+  const patch = (p: Partial<BandoEdits>) => setDraft((d) => ({ ...d, ...p }))
+
+  const save = () => {
+    if (!draft.name.trim()) return
+    if (item.custom) {
+      updatePlace(item.id, { name: draft.name.trim() })
+    } else {
+      const edits: BandoEdits = {}
+      if (draft.name.trim() !== raw.name) edits.name = draft.name.trim()
+      if (draft.address.trim() !== raw.address) edits.address = draft.address.trim()
+      if (draft.period && draft.period !== raw.period) edits.period = draft.period
+      if (draft.usage && draft.usage !== raw.usage) edits.usage = draft.usage
+      if (draft.condition && draft.condition !== raw.condition) edits.condition = draft.condition
+      setMark(item.id, { edits: Object.keys(edits).length ? edits : undefined })
+      showToast(
+        Object.keys(edits).length
+          ? 'Corrections saved — use "Copy fixes" in filters to feed them back to the dataset'
+          : 'No changes from the register data',
+      )
+    }
+    onClose()
+  }
+
+  const options = (values: readonly string[]) =>
+    values.map((v) => (
+      <option key={v} value={v}>
+        {en(v)}
+      </option>
+    ))
+
+  return (
+    <div className="edit-form">
+      <label>
+        Name
+        <input value={draft.name} onChange={(e) => patch({ name: e.target.value })} />
+      </label>
+      {!item.custom && (
+        <>
+          <label>
+            Address
+            <input value={draft.address} onChange={(e) => patch({ address: e.target.value })} />
+          </label>
+          <div className="edit-selects">
+            <label>
+              Era
+              <select value={draft.period} onChange={(e) => patch({ period: e.target.value })}>
+                <option value="">—</option>
+                {options(PERIOD_VALUES)}
+              </select>
+            </label>
+            <label>
+              Usage
+              <select value={draft.usage} onChange={(e) => patch({ usage: e.target.value })}>
+                <option value="">—</option>
+                {options(USAGE_VALUES)}
+              </select>
+            </label>
+            <label>
+              Condition
+              <select value={draft.condition} onChange={(e) => patch({ condition: e.target.value })}>
+                <option value="">—</option>
+                {options(CONDITION_VALUES)}
+              </select>
+            </label>
+          </div>
+        </>
+      )}
+      <div className="filter-actions">
+        <button className="btn btn-small btn-primary" onClick={save}>
+          Save
+        </button>
+        <button className="btn btn-small" onClick={onClose}>
+          Cancel
+        </button>
+        {hasEdits && !item.custom && (
+          <button
+            className="btn btn-small btn-muted"
+            onClick={() => {
+              setMark(item.id, { edits: undefined })
+              onClose()
+            }}
+          >
+            Revert edits
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -25,9 +147,11 @@ export function DetailContent() {
   const removePlace = useMarksStore((s) => s.removePlace)
   const [copied, setCopied] = useState(false)
   const [comment, setComment] = useState('')
+  const [editing, setEditing] = useState(false)
 
   useEffect(() => {
     setCopied(false)
+    setEditing(false)
     setComment(selectedId != null ? (useMarksStore.getState().marks[selectedId]?.comment ?? '') : '')
   }, [selectedId])
 
@@ -37,6 +161,10 @@ export function DetailContent() {
 
   const status = mark?.status
   const coords = `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`
+  // Moved pins and custom places have no (fresh) dataset L-EST97 coordinates —
+  // project them from WGS84 so the XGIS link always works.
+  const lest =
+    item.lestX != null && item.lestY != null ? { x: item.lestX, y: item.lestY } : wgs84ToLest97(item.lat, item.lon)
   const copyCoords = async () => {
     try {
       await navigator.clipboard.writeText(coords)
@@ -58,25 +186,41 @@ export function DetailContent() {
 
   return (
     <div className="detail-panel" aria-label={item.name}>
-      <button className="btn btn-small back" onClick={() => select(undefined)}>
-        ← List
-      </button>
-      <h2>{item.name}</h2>
-      <p className="address">
-        {item.custom ? 'Custom place' : `${item.address}, ${item.municipality}, ${item.county}`}
-      </p>
-      <div className="chips">
-        {item.period && <Chip value={item.period} />}
-        {item.usage && <Chip value={item.usage} />}
-        {item.condition && <Chip value={item.condition} className={item.condition === 'halb' ? 'chip-bad' : ''} />}
-        {(item.geocode === 'street' || item.geocode === 'village') && (
-          <span className="chip chip-warn" title="Coordinate is approximate — geocoded from an imprecise address">
-            ~{item.geocode} accuracy
-          </span>
-        )}
-        {item.custom && <span className="chip">📍 yours</span>}
-        {mark?.fix && <span className="chip">📌 moved</span>}
+      <div className="detail-topbar">
+        <button className="btn btn-small back" onClick={() => select(undefined)}>
+          ← List
+        </button>
+        <button
+          className={`btn btn-small ${editing ? 'btn-rejected' : ''}`}
+          title="Correct this place's information"
+          onClick={() => setEditing(!editing)}
+        >
+          {editing ? 'Cancel' : '✎ Edit'}
+        </button>
       </div>
+      {editing ? (
+        <EditForm raw={raw!} item={item} onClose={() => setEditing(false)} />
+      ) : (
+        <>
+          <h2>{item.name}</h2>
+          <p className="address">
+            {item.custom ? 'Custom place' : `${item.address}, ${item.municipality}, ${item.county}`}
+          </p>
+          <div className="chips">
+            {item.period && <Chip value={item.period} />}
+            {item.usage && <Chip value={item.usage} />}
+            {item.condition && <Chip value={item.condition} className={item.condition === 'halb' ? 'chip-bad' : ''} />}
+            {(item.geocode === 'street' || item.geocode === 'village') && (
+              <span className="chip chip-warn" title="Coordinate is approximate — geocoded from an imprecise address">
+                ~{item.geocode} accuracy
+              </span>
+            )}
+            {item.custom && <span className="chip">📍 yours</span>}
+            {mark?.fix && <span className="chip">📌 moved</span>}
+            {mark?.edits && <span className="chip">✏️ edited</span>}
+          </div>
+        </>
+      )}
       {item.photos.length > 0 && (
         <div className="photos">
           {item.photos.map((p, i) => (
@@ -191,11 +335,9 @@ export function DetailContent() {
         <a className="btn" href={GMAPS_URL(item.lat, item.lon)} target="_blank" rel="noreferrer">
           Google Maps
         </a>
-        {item.lestX != null && item.lestY != null && (
-          <a className="btn" href={XGIS_URL(item.lestX, item.lestY)} target="_blank" rel="noreferrer">
-            XGIS
-          </a>
-        )}
+        <a className="btn" href={XGIS_URL(lest.x, lest.y)} target="_blank" rel="noreferrer">
+          XGIS
+        </a>
         {!item.custom && (
           <a className="btn" href={MUINAS_DETAIL_URL(item.id)} target="_blank" rel="noreferrer">
             muinas.ee
