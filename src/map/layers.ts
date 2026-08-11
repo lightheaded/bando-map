@@ -25,6 +25,21 @@ export const BASE_LAYERS = {
 
 export type BaseLayerId = keyof typeof BASE_LAYERS
 
+/** The tile sources a base-layer choice draws from ("hybriid" = orthophoto + overlay). */
+export function sourcesFor(active: BaseLayerId): ('kaart' | 'foto' | 'hybriid')[] {
+  return active === 'kaart' ? ['kaart'] : active === 'foto' ? ['foto'] : ['foto', 'hybriid']
+}
+
+/**
+ * Concrete tile URL for offline downloads — the same URL MapLibre requests,
+ * so the service worker cache hits. `y` is XYZ; the service is TMS, so flip.
+ */
+export function tileUrl(source: 'kaart' | 'foto' | 'hybriid', z: number, x: number, y: number): string {
+  const ext = source === 'foto' ? 'jpg' : 'png'
+  const yTms = 2 ** z - 1 - y
+  return `https://tiles.maaamet.ee/tm/tms/1.0.0/${source}@GMC/${z}/${x}/${yTms}.${ext}?${TRACKING}`
+}
+
 /**
  * All three Maa-amet base layers live in one style; switching toggles layer
  * visibility so tiles stay cached. "hybriid" is the orthophoto with the

@@ -3,6 +3,7 @@ import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { LayerSwitcher } from './LayerSwitcher'
 import { FilterButton, FilterPanel } from './FilterBar'
+import { OfflineButton, OfflinePanel } from './OfflinePanel'
 import { AddPlaceButton } from './AddPlace'
 import { PlacesList, useInViewBandos } from './PlacesList'
 import { DetailContent } from './DetailPanel'
@@ -96,8 +97,10 @@ export function Sidebar() {
         <LayerSwitcher />
         <FilterButton />
         <AddPlaceButton />
+        <OfflineButton />
       </div>
       <FilterPanel />
+      <OfflinePanel />
       <div className="sidebar-body">{selectedId != null ? <DetailContent /> : <PlacesList />}</div>
     </aside>
   )

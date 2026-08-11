@@ -162,7 +162,7 @@ export function MapView() {
     map.touchZoomRotate.disableRotation()
     map.keyboard.disableRotation()
     mapRef.current = map
-    if (import.meta.env.DEV) (window as unknown as { __map: maplibregl.Map }).__map = map
+    ;(window as unknown as { __map: maplibregl.Map }).__map = map // debug/verification handle
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
     const geolocate = new maplibregl.GeolocateControl({
@@ -180,6 +180,7 @@ export function MapView() {
       useAppStore.getState().setMapView({
         bounds: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
         center: [c.lng, c.lat],
+        zoom: map.getZoom(),
       })
       sessionStorage.setItem(VIEW_KEY, JSON.stringify({ center: [c.lng, c.lat], zoom: map.getZoom() }))
     }
