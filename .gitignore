@@ -10,5 +10,6 @@ infra/.terraform/
 infra/*.tfstate*
 infra/.terraform.lock.hcl
 infra/plan.out
+infra/tfplan*
 data/pdfs/
 .vite/
