@@ -25,10 +25,15 @@ variable "aws_profile" {
   nullable    = true
 }
 
-variable "github_repo" {
-  description = "GitHub repository allowed to deploy, owner/name"
+variable "github_oidc_sub" {
+  description = <<-EOT
+    Exact OIDC subject claim allowed to assume the deploy role. GitHub's
+    current default embeds owner and repo IDs (resource-reuse protection);
+    read the live value with:
+    gh api repos/<owner>/<repo>/actions/oidc/customization/sub --jq .sub_claim_prefix
+  EOT
   type        = string
-  default     = "lightheaded/bando-map"
+  default     = "repo:lightheaded@3413870/bando-map@1330907098:ref:refs/heads/main"
 }
 
 provider "aws" {
@@ -213,7 +218,7 @@ resource "aws_iam_role" "github_deploy" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub" = var.github_oidc_sub
         }
       }
     }]
