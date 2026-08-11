@@ -10,8 +10,6 @@ import { PHOTO_URL, type Bando, type UserMark } from '../types'
 
 const ESTONIA_BOUNDS: [number, number, number, number] = [21.5, 57.4, 28.3, 59.8]
 const VIEW_KEY = 'bando-map:view'
-/** From this zoom up, dots become photo markers (clustering ends at 13). */
-const PHOTO_MARKER_ZOOM = 14
 
 const isMobile = () => window.matchMedia('(max-width: 640px)').matches
 
@@ -32,17 +30,6 @@ function savedView(): { center: [number, number]; zoom: number } | undefined {
 }
 
 // new = red, shortlisted = blue, visited = green, rejected = gray
-const STATUS_COLOR = [
-  'case',
-  ['==', ['get', 'status'], 'rejected'],
-  '#71717a',
-  ['get', 'visited'],
-  '#059669',
-  ['==', ['get', 'status'], 'shortlisted'],
-  '#2563eb',
-  '#e11d48',
-] as maplibregl.ExpressionSpecification
-
 const statusColor = (mark?: UserMark) =>
   mark?.status === 'rejected'
     ? '#71717a'
@@ -79,10 +66,11 @@ function buildPhotoMarkerEl(b: Bando): HTMLDivElement {
 }
 
 /**
- * Above PHOTO_MARKER_ZOOM the circle layers hide (maxzoom) and every filtered
- * bando in the viewport gets an HTML marker with its photo thumbnail instead,
- * so spots are recognizable at a glance. Diffed in place: existing markers are
- * kept, stale ones removed.
+ * Every spot the clustering leaves unclustered at the current zoom gets an
+ * HTML marker with its photo thumbnail — density decides, not a zoom
+ * threshold, so a lone spot shows its photo even on the whole-country view
+ * while dense areas stay as numbered clusters until they split. Diffed in
+ * place: existing markers are kept, stale ones removed.
  */
 function syncPhotoMarkers(
   map: maplibregl.Map,
@@ -91,10 +79,13 @@ function syncPhotoMarkers(
   marks: Record<number, UserMark>,
   selectedId: number | undefined,
 ) {
+  const byId = new Map(bandos.map((b) => [b.id, b]))
   const wanted = new Map<number, Bando>()
-  if (map.getZoom() >= PHOTO_MARKER_ZOOM) {
-    const bounds = map.getBounds()
-    for (const b of bandos) if (bounds.contains([b.lon, b.lat])) wanted.set(b.id, b)
+  // Loaded-tile features at the current zoom; clusters carry point_count.
+  for (const f of map.querySourceFeatures('bandos')) {
+    const id = f.properties?.cluster ? undefined : f.properties?.id
+    const b = id != null ? byId.get(Number(id)) : undefined
+    if (b) wanted.set(b.id, b)
   }
   for (const [id, marker] of markers) {
     if (!wanted.has(id)) {
@@ -193,9 +184,13 @@ export function MapView() {
       sessionStorage.setItem(VIEW_KEY, JSON.stringify({ center: [c.lng, c.lat], zoom: map.getZoom() }))
     }
     map.on('moveend', publishView)
-    // 'zoom' catches the dot→photo handover mid-gesture; 'moveend' catches pans.
+    // 'zoom' catches the cluster→photo handover mid-gesture, 'moveend' pans,
+    // and 'sourcedata' the async cluster recomputation after zoom/setData.
     map.on('zoom', () => syncMarkersRef.current())
     map.on('moveend', () => syncMarkersRef.current())
+    map.on('sourcedata', (e) => {
+      if (e.sourceId === 'bandos' && e.isSourceLoaded) syncMarkersRef.current()
+    })
 
     map.on('load', () => {
       publishView()
@@ -204,7 +199,8 @@ export function MapView() {
         data: { type: 'FeatureCollection', features: [] },
         cluster: true,
         clusterMaxZoom: 13,
-        clusterRadius: 45,
+        // Roomy enough that two unclustered photo markers (52px) don't overlap.
+        clusterRadius: 60,
       })
       setSourceReady(true)
       map.addLayer({
@@ -232,32 +228,8 @@ export function MapView() {
         },
         paint: { 'text-color': '#fff' },
       })
-      map.addLayer({
-        id: 'bando-point',
-        type: 'circle',
-        source: 'bandos',
-        filter: ['!', ['has', 'point_count']],
-        maxzoom: PHOTO_MARKER_ZOOM, // photo markers take over from here
-        paint: {
-          'circle-color': STATUS_COLOR,
-          'circle-radius': 8,
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#fff',
-        },
-      })
-      map.addLayer({
-        id: 'bando-selected',
-        type: 'circle',
-        source: 'bandos',
-        filter: ['==', ['get', 'id'], -0.5],
-        maxzoom: PHOTO_MARKER_ZOOM, // the photo marker carries the selection ring
-        paint: {
-          'circle-color': STATUS_COLOR,
-          'circle-radius': 11,
-          'circle-stroke-width': 3,
-          'circle-stroke-color': '#fbbf24',
-        },
-      })
+      // Unclustered spots are photo markers (HTML, see syncPhotoMarkers) —
+      // only clusters render as circles.
 
       map.on('click', 'clusters', async (e) => {
         const state = useAppStore.getState()
@@ -266,12 +238,6 @@ export function MapView() {
         const source = map.getSource('bandos') as maplibregl.GeoJSONSource
         const zoom = await source.getClusterExpansionZoom(feature.properties.cluster_id)
         map.easeTo({ center: (feature.geometry as Point).coordinates as [number, number], zoom })
-      })
-      map.on('click', 'bando-point', (e) => {
-        const state = useAppStore.getState()
-        if (state.placeDraft || state.moveTarget != null) return
-        const id = e.features?.[0]?.properties?.id
-        if (id != null) select(Number(id))
       })
       map.on('click', (e) => {
         const state = useAppStore.getState()
@@ -293,13 +259,13 @@ export function MapView() {
           return
         }
         if (state.placeDraft) return
-        const hits = map.queryRenderedFeatures(e.point, { layers: ['clusters', 'bando-point'] })
+        // Photo-marker clicks never reach here (stopPropagation) — a canvas
+        // click outside any cluster means empty map, so deselect.
+        const hits = map.queryRenderedFeatures(e.point, { layers: ['clusters'] })
         if (!hits.length) select(undefined)
       })
-      for (const layer of ['clusters', 'bando-point']) {
-        map.on('mouseenter', layer, () => (map.getCanvas().style.cursor = 'pointer'))
-        map.on('mouseleave', layer, () => (map.getCanvas().style.cursor = ''))
-      }
+      map.on('mouseenter', 'clusters', () => (map.getCanvas().style.cursor = 'pointer'))
+      map.on('mouseleave', 'clusters', () => (map.getCanvas().style.cursor = ''))
     })
 
     return () => {
@@ -337,7 +303,6 @@ export function MapView() {
   useEffect(() => {
     const map = mapRef.current
     if (!map || !sourceReady) return
-    map.setFilter('bando-selected', ['==', ['get', 'id'], selectedId ?? -0.5])
     // Look in the full dataset, not the filtered view — deep links may point at
     // a bando the current filters exclude. Apply any manual position fix.
     const raw =
