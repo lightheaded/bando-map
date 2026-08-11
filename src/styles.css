@@ -422,8 +422,28 @@ fieldset legend {
 
 .detail-topbar {
   display: flex;
-  justify-content: space-between;
+  gap: 6px;
   margin-bottom: 8px;
+}
+
+/* List stays left; the correction tools (Edit, Move) group on the right. */
+.detail-topbar .back {
+  margin-right: auto;
+}
+
+.move-btn,
+.toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The checkbox is display-only (the button is the control) and inherits the
+   button's state color. */
+.toggle-btn input {
+  pointer-events: none;
+  margin: 0;
+  accent-color: currentColor;
 }
 
 /* ============ Edit form ============ */
