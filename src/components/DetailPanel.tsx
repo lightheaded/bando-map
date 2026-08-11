@@ -4,7 +4,7 @@ import { useMarksStore } from '../state/marks'
 import { placeToBando } from '../state/filters'
 import { en, MUINAS_DETAIL_URL, PHOTO_URL, GMAPS_URL, GMAPS_DIRECTIONS_URL, XGIS_URL } from '../types'
 
-export function DetailPanel() {
+export function DetailContent() {
   const selectedId = useAppStore((s) => s.selectedId)
   const bando = useAppStore((s) => s.bandos.find((b) => b.id === s.selectedId))
   const place = useMarksStore((s) => (selectedId != null ? s.places.find((p) => p.id === selectedId) : undefined))
@@ -47,10 +47,9 @@ export function DetailPanel() {
   }
 
   return (
-    <aside className="detail-panel" aria-label={item.name}>
-      <div className="grabber" aria-hidden="true" />
-      <button className="close" onClick={() => select(undefined)} aria-label="Close">
-        ×
+    <div className="detail-panel" aria-label={item.name}>
+      <button className="btn btn-small back" onClick={() => select(undefined)}>
+        ← List
       </button>
       <h2>{item.name}</h2>
       <p className="address">
@@ -184,6 +183,6 @@ export function DetailPanel() {
           Share
         </button>
       </div>
-    </aside>
+    </div>
   )
 }

@@ -15,6 +15,10 @@ interface AppState {
   placeDraft?: 'picking' | { lat: number; lon: number }
   /** One-shot map target for deep links whose id wasn't found. */
   pendingView?: { lat: number; lon: number }
+  /** Current map viewport (west,south,east,north + center), updated on moveend. */
+  mapView?: { bounds: [number, number, number, number]; center: [number, number] }
+  /** Mobile bottom sheet expanded to show the list. */
+  sheetOpen: boolean
   setDataset: (d: BandoDataset) => void
   select: (id?: number) => void
   setBaseLayer: (l: BaseLayerId) => void
@@ -24,6 +28,8 @@ interface AppState {
   setFiltersOpen: (open: boolean) => void
   setPlaceDraft: (draft?: 'picking' | { lat: number; lon: number }) => void
   setPendingView: (view?: { lat: number; lon: number }) => void
+  setMapView: (view: { bounds: [number, number, number, number]; center: [number, number] }) => void
+  setSheetOpen: (open: boolean) => void
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined
@@ -49,6 +55,9 @@ export const useAppStore = create<AppState>((set) => ({
   setFiltersOpen: (open) => set({ filtersOpen: open }),
   setPlaceDraft: (draft) => set({ placeDraft: draft }),
   setPendingView: (view) => set({ pendingView: view }),
+  sheetOpen: false,
+  setMapView: (view) => set({ mapView: view }),
+  setSheetOpen: (open) => set({ sheetOpen: open }),
 }))
 
 if (import.meta.env.DEV) {

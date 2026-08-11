@@ -1,9 +1,7 @@
 import { useEffect } from 'react'
 import { MapView } from './map/MapView'
-import { LayerSwitcher } from './components/LayerSwitcher'
-import { DetailPanel } from './components/DetailPanel'
-import { FilterButton, FilterPanel } from './components/FilterBar'
-import { AddPlaceButton, AddPlaceForm } from './components/AddPlace'
+import { Sidebar } from './components/Sidebar'
+import { AddPlaceForm } from './components/AddPlace'
 import { useDeepLink } from './state/deeplink'
 import { useAppStore } from './state/store'
 import type { BandoDataset } from './types'
@@ -25,14 +23,8 @@ export default function App() {
   return (
     <div className="app">
       <MapView />
-      <div className="top-left">
-        <LayerSwitcher />
-        <FilterButton />
-        <AddPlaceButton />
-      </div>
-      <FilterPanel />
+      <Sidebar />
       <AddPlaceForm />
-      <DetailPanel />
       <Toast />
     </div>
   )

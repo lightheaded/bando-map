@@ -9,6 +9,25 @@ import { useFilteredBandos } from '../state/filters'
 import type { Bando, UserMark } from '../types'
 
 const ESTONIA_BOUNDS: [number, number, number, number] = [21.5, 57.4, 28.3, 59.8]
+const VIEW_KEY = 'bando-map:view'
+
+const isMobile = () => window.matchMedia('(max-width: 640px)').matches
+
+/** Map padding that keeps points visible next to the sidebar / above the sheet. */
+function panelPadding(): { top: number; left: number; right: number; bottom: number } {
+  return isMobile()
+    ? { top: 0, left: 0, right: 0, bottom: Math.round(window.innerHeight * 0.5) }
+    : { top: 0, left: 380, right: 0, bottom: 0 }
+}
+
+/** Survives dev-server reloads and accidental refreshes. */
+function savedView(): { center: [number, number]; zoom: number } | undefined {
+  try {
+    return JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? '')
+  } catch {
+    return undefined
+  }
+}
 
 // new = red, shortlisted = blue, visited = green, rejected = gray
 const STATUS_COLOR = [
@@ -55,11 +74,13 @@ export function MapView() {
 
   useEffect(() => {
     if (!containerRef.current) return
+    const restored = savedView()
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: mapStyle(useAppStore.getState().baseLayer),
-      bounds: ESTONIA_BOUNDS,
-      fitBoundsOptions: { padding: 20 },
+      ...(restored
+        ? { center: restored.center, zoom: restored.zoom }
+        : { bounds: ESTONIA_BOUNDS, fitBoundsOptions: { padding: 20 } }),
       attributionControl: { compact: true },
     })
     mapRef.current = map
@@ -75,7 +96,19 @@ export function MapView() {
     )
     map.addControl(geolocate, 'top-right')
 
+    const publishView = () => {
+      const b = map.getBounds()
+      const c = map.getCenter()
+      useAppStore.getState().setMapView({
+        bounds: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
+        center: [c.lng, c.lat],
+      })
+      sessionStorage.setItem(VIEW_KEY, JSON.stringify({ center: [c.lng, c.lat], zoom: map.getZoom() }))
+    }
+    map.on('moveend', publishView)
+
     map.on('load', () => {
+      publishView()
       map.addSource('bandos', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -194,13 +227,10 @@ export function MapView() {
       useAppStore.getState().bandos.find((b) => b.id === selectedId) ??
       useMarksStore.getState().places.find((p) => p.id === selectedId)
     if (bando) {
-      const isMobile = window.matchMedia('(max-width: 640px)').matches
       map.easeTo({
         center: [bando.lon, bando.lat],
         zoom: Math.max(map.getZoom(), 14),
-        padding: isMobile
-          ? { top: 0, left: 0, right: 0, bottom: Math.round(window.innerHeight * 0.5) }
-          : { top: 0, left: 0, bottom: 0, right: 400 },
+        padding: panelPadding(),
         duration: 500,
       })
     } else {
@@ -208,10 +238,16 @@ export function MapView() {
     }
   }, [selectedId, sourceReady])
 
-  // Frame the filtered result set whenever the filters change.
+  // Frame the filtered result set whenever the filters change — but not on
+  // mount, so a restored view (dev reload, refresh) isn't yanked away.
+  const filtersTouched = useRef(false)
   useEffect(() => {
     const map = mapRef.current
     if (!map || !sourceReady) return
+    if (!filtersTouched.current) {
+      filtersTouched.current = true
+      return
+    }
     const pts = bandosRef.current
     if (!pts.length) return
     let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity
@@ -226,7 +262,13 @@ export function MapView() {
         [minLon, minLat],
         [maxLon, maxLat],
       ],
-      { padding: 70, maxZoom: 14, duration: 600 },
+      {
+        padding: isMobile()
+          ? { top: 70, left: 40, right: 40, bottom: 110 }
+          : { top: 70, left: 430, right: 70, bottom: 70 },
+        maxZoom: 14,
+        duration: 600,
+      },
     )
   }, [filters, sourceReady])
 
