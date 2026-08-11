@@ -7,9 +7,13 @@ const OUT_DIR = 'public/thumbs'
 const imageDelayMs = Number(process.env.IMAGE_DELAY_MS ?? 1500)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-/** Returns the app-relative thumb path, or undefined if the photo can't be fetched. */
-export async function ensureThumb(recordId: number, photoId: number): Promise<string | undefined> {
-  const rel = `thumbs/${recordId}.webp`
+/**
+ * Returns the app-relative thumb path, or undefined if the photo can't be fetched.
+ * The first photo of a record keeps the legacy `thumbs/<recordId>.webp` name so
+ * covers downloaded by earlier runs aren't re-fetched.
+ */
+export async function ensureThumb(recordId: number, photoId: number, isCover: boolean): Promise<string | undefined> {
+  const rel = isCover ? `thumbs/${recordId}.webp` : `thumbs/${recordId}-${photoId}.webp`
   const out = `public/${rel}`
   try {
     await access(out)

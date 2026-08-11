@@ -3,11 +3,14 @@ import { MapView } from './map/MapView'
 import { LayerSwitcher } from './components/LayerSwitcher'
 import { DetailPanel } from './components/DetailPanel'
 import { FilterButton, FilterPanel } from './components/FilterBar'
+import { AddPlaceButton, AddPlaceForm } from './components/AddPlace'
+import { useDeepLink } from './state/deeplink'
 import { useAppStore } from './state/store'
 import type { BandoDataset } from './types'
 
 export default function App() {
   const setDataset = useAppStore((s) => s.setDataset)
+  useDeepLink()
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/bandos.json`)
@@ -25,8 +28,10 @@ export default function App() {
       <div className="top-left">
         <LayerSwitcher />
         <FilterButton />
+        <AddPlaceButton />
       </div>
       <FilterPanel />
+      <AddPlaceForm />
       <DetailPanel />
       <Toast />
     </div>

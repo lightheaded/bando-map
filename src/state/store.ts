@@ -11,6 +11,10 @@ interface AppState {
   toast?: string
   filters: FilterState
   filtersOpen: boolean
+  /** Add-place flow: 'picking' = waiting for a map tap, coords = form open. */
+  placeDraft?: 'picking' | { lat: number; lon: number }
+  /** One-shot map target for deep links whose id wasn't found. */
+  pendingView?: { lat: number; lon: number }
   setDataset: (d: BandoDataset) => void
   select: (id?: number) => void
   setBaseLayer: (l: BaseLayerId) => void
@@ -18,6 +22,8 @@ interface AppState {
   setFilters: (patch: Partial<FilterState>) => void
   resetFilters: () => void
   setFiltersOpen: (open: boolean) => void
+  setPlaceDraft: (draft?: 'picking' | { lat: number; lon: number }) => void
+  setPendingView: (view?: { lat: number; lon: number }) => void
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined
@@ -41,4 +47,10 @@ export const useAppStore = create<AppState>((set) => ({
   setFilters: (patch) => set((s) => ({ filters: { ...s.filters, ...patch } })),
   resetFilters: () => set({ filters: DEFAULT_FILTERS }),
   setFiltersOpen: (open) => set({ filtersOpen: open }),
+  setPlaceDraft: (draft) => set({ placeDraft: draft }),
+  setPendingView: (view) => set({ pendingView: view }),
 }))
+
+if (import.meta.env.DEV) {
+  ;(window as unknown as { __store: typeof useAppStore }).__store = useAppStore
+}

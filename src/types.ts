@@ -23,8 +23,13 @@ export interface Bando {
   geocode: 'building' | 'street' | 'village' | 'manual'
   /** Photo ids under register.muinas.ee/content/architecture/regular/<photoId>.jpg */
   photos: number[]
-  /** Local thumbnail path relative to the app base, e.g. "thumbs/45.webp". */
-  thumb?: string
+  /** True for user-added places (kept in localStorage, not in the dataset). */
+  custom?: boolean
+  /**
+   * Local thumbnail paths aligned with `photos` (null where the download
+   * failed), relative to the app base, e.g. "thumbs/45.webp".
+   */
+  thumbs?: (string | null)[]
 }
 
 export interface BandoDataset {
@@ -34,22 +39,57 @@ export interface BandoDataset {
   bandos: Bando[]
 }
 
-/** Per-bando user state, localStorage-only for now. Versioned for a future backend. */
+/**
+ * Per-bando user state, localStorage-only for now. Versioned for a future backend.
+ *
+ * Two independent axes: `status` is the online-triage verdict (undefined = new,
+ * not yet triaged), `visited` records that you were physically there — so
+ * "visited but rejected" and "visited, 5 stars" are both expressible.
+ */
 export interface UserMark {
+  status?: 'shortlisted' | 'rejected'
   visited?: boolean
-  hidden?: boolean
   rating?: 1 | 2 | 3 | 4 | 5
   comment?: string
   updatedAt: string
 }
 
+export type TriageStatus = 'new' | 'shortlisted' | 'rejected'
+
+/** A user-added spot not in any register. Negative ids so they never collide. */
+export interface CustomPlace {
+  id: number
+  name: string
+  lat: number
+  lon: number
+  createdAt: string
+}
+
 export interface UserData {
   version: 1
   marks: Record<number, UserMark>
+  customPlaces?: CustomPlace[]
 }
 
 export const USAGE_VALUES = ['ei kasutata', 'elumaja', 'kasutusel', 'koolimaja', 'sakraalhoone', 'tuletorn'] as const
 export const CONDITION_VALUES = ['halb', 'rahuldav', 'hea'] as const
+
+/** The register data stays in Estonian; the UI displays English. */
+export const EN: Record<string, string> = {
+  'ei kasutata': 'not in use',
+  elumaja: 'residential',
+  kasutusel: 'in use',
+  koolimaja: 'schoolhouse',
+  sakraalhoone: 'sacral building',
+  tuletorn: 'lighthouse',
+  halb: 'poor',
+  rahuldav: 'fair',
+  hea: 'good',
+  tsaariaeg: 'Tsarist era',
+  vabariik: 'first republic',
+  nõukogude: 'Soviet era',
+}
+export const en = (value: string | undefined) => (value ? (EN[value] ?? value) : undefined)
 
 export const MUINAS_DETAIL_URL = (id: number) =>
   `https://register.muinas.ee/public.php?menuID=architecture&action=view&id=${id}`
