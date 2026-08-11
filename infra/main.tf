@@ -10,12 +10,12 @@ terraform {
 
 variable "domain" {
   type    = string
-  default = "bando.toom.as"
+  default = "bando.lagle.xyz"
 }
 
 variable "zone_name" {
   type    = string
-  default = "toom.as"
+  default = "lagle.xyz"
 }
 
 variable "aws_profile" {

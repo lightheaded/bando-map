@@ -57,7 +57,7 @@ Everything is disk-cached under `data/cache/` (gitignored) — delete it for a f
 
 ## Deployment
 
-The app is a static site served from S3 behind CloudFront at **https://bando.toom.as**.
+The app is a static site served from S3 behind CloudFront at **https://bando.lagle.xyz**.
 
 - `infra/` holds the Terraform/OpenTofu stack: private S3 origin (OAC), CloudFront with SPA fallback, ACM certificate, Route53 records, and a GitHub-OIDC deploy role — no long-lived AWS keys anywhere. Apply locally: `cd infra && terraform apply` (uses ambient AWS credentials, or pass `-var aws_profile=...`). State is local and gitignored.
 - `.github/workflows/deploy.yml` builds and syncs `dist/` to S3 on every push to `main` (hashed assets get immutable caching; the HTML shell and dataset revalidate), then invalidates CloudFront. It authenticates by assuming the OIDC role from repo variables `AWS_DEPLOY_ROLE_ARN`, `S3_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID`.

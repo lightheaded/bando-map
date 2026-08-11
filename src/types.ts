@@ -110,7 +110,7 @@ export const ICON: Record<string, string> = {
 }
 
 /** Archived register PDFs, served from the app's own CDN. */
-export const PDF_URL = (id: number) => `https://bando.toom.as/pdfs/${id}.pdf`
+export const PDF_URL = (id: number) => `https://bando.lagle.xyz/pdfs/${id}.pdf`
 
 export const MUINAS_DETAIL_URL = (id: number) =>
   `https://register.muinas.ee/public.php?menuID=architecture&action=view&id=${id}`
