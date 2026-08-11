@@ -1,145 +1,46 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../state/store'
 import { BASE_LAYERS } from '../map/layers'
 import { planAreaSave, downloadInto, MAX_SAVE_ZOOM, type SaveProgress } from '../offline/tiles'
-import {
-  CACHE_NAMES,
-  cacheStats,
-  clearCache,
-  appShellBytes,
-  storageEstimate,
-  isPersisted,
-  requestPersist,
-  fmtBytes,
-  type CacheStats,
-} from '../offline/storage'
-
-import { syncEnabled } from '../sync/config'
-import { signIn } from '../sync/auth'
-import { syncNow, signOut } from '../sync/sync'
-
-const subscribeOnline = (cb: () => void) => {
-  window.addEventListener('online', cb)
-  window.addEventListener('offline', cb)
-  return () => {
-    window.removeEventListener('online', cb)
-    window.removeEventListener('offline', cb)
-  }
-}
-const useOnline = () => useSyncExternalStore(subscribeOnline, () => navigator.onLine)
+import { CACHE_NAMES, cacheStats, fmtBytes, type CacheStats } from '../offline/storage'
+import { useOnline } from './useOnline'
+import { DownloadIcon } from './icons'
 
 export function OfflineButton() {
-  const open = useAppStore((s) => s.offlineOpen)
-  const setOpen = useAppStore((s) => s.setOfflineOpen)
+  const open = useAppStore((s) => s.panel === 'offline')
+  const togglePanel = useAppStore((s) => s.togglePanel)
   const online = useOnline()
   return (
     <button
-      className={`filter-button offline-button ${open ? 'active' : ''}`}
-      onClick={() => setOpen(!open)}
+      className={open ? 'active' : ''}
+      onClick={() => togglePanel('offline')}
       aria-expanded={open}
-      title="Offline maps & storage"
+      title="Download maps & photos for offline use"
     >
-      Offline
+      <DownloadIcon />
+      Downloads
       {!online && <span className="offline-dot" aria-label="You are offline" />}
     </button>
   )
 }
 
-function timeAgo(ms: number): string {
-  const min = Math.round((Date.now() - ms) / 60_000)
-  if (min < 1) return 'just now'
-  if (min < 60) return `${min} min ago`
-  const h = Math.round(min / 60)
-  return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`
-}
-
-/** Cross-device sync: sign-in offer, or status + manual sync when signed in. */
-function SyncCard() {
-  const sync = useAppStore((s) => s.sync)
-  const online = useOnline()
-  if (!syncEnabled()) return null
-  return (
-    <div className="offline-card">
-      {sync.email ? (
-        <>
-          <div className="offline-card-head">
-            <strong>Synced across devices</strong>
-            <span className="offline-sub">{sync.email}</span>
-          </div>
-          <div className="offline-row">
-            <span className="offline-sub">
-              {sync.state === 'syncing'
-                ? 'syncing…'
-                : sync.state === 'error'
-                  ? online
-                    ? 'sync failed — will retry'
-                    : 'offline — will sync when back online'
-                  : sync.lastAt
-                    ? `last synced ${timeAgo(sync.lastAt)}`
-                    : 'not synced yet'}
-            </span>
-            <span className="offline-actions">
-              <button className="btn btn-small" onClick={() => syncNow()} disabled={!online || sync.state === 'syncing'}>
-                Sync now
-              </button>
-              <button className="btn btn-small btn-muted" onClick={signOut}>
-                Sign out
-              </button>
-            </span>
-          </div>
-        </>
-      ) : (
-        <div className="offline-row">
-          <span className="offline-sub">
-            <strong className="sync-pitch">Sync across devices</strong>
-            Your shortlist, visits, notes and pin fixes on every device.
-          </span>
-          <button className="btn btn-small btn-primary" onClick={signIn} disabled={!online}>
-            Sign in
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-interface AllStats {
-  tiles: CacheStats
-  photos: CacheStats
-  data: CacheStats
-  app: number
-  usage: number
-  quota: number
-  persisted: boolean
-}
-
-async function loadStats(): Promise<AllStats> {
-  const [tiles, photos, data, app, est, persisted] = await Promise.all([
-    cacheStats(CACHE_NAMES.tiles),
-    cacheStats(CACHE_NAMES.photos),
-    cacheStats(CACHE_NAMES.data),
-    appShellBytes(),
-    storageEstimate(),
-    isPersisted(),
-  ])
-  return { tiles, photos, data, app, ...est, persisted }
-}
-
+/** Save-for-offline downloads: the current map view and all spot photos. */
 export function OfflinePanel() {
-  const open = useAppStore((s) => s.offlineOpen)
+  const open = useAppStore((s) => s.panel === 'offline')
   const mapView = useAppStore((s) => s.mapView)
+  const mapZoom = useAppStore((s) => s.mapZoom)
   const baseLayer = useAppStore((s) => s.baseLayer)
   const bandos = useAppStore((s) => s.bandos)
   const thumbsBytes = useAppStore((s) => s.thumbsBytes)
   const showToast = useAppStore((s) => s.showToast)
   const online = useOnline()
 
-  const [stats, setStats] = useState<AllStats>()
+  const [photoStats, setPhotoStats] = useState<CacheStats>()
   const [saving, setSaving] = useState<SaveProgress>()
   const [savingPhotos, setSavingPhotos] = useState<SaveProgress>()
   const abortRef = useRef<AbortController>(undefined)
 
-  const refresh = () => loadStats().then(setStats)
+  const refresh = () => cacheStats(CACHE_NAMES.photos).then(setPhotoStats)
   useEffect(() => {
     if (open) refresh()
     // Leaving the panel cancels a running download.
@@ -158,10 +59,10 @@ export function OfflinePanel() {
     setSaving({ done: 0, total: plan.urls.length, bytes: 0, failed: 0 })
     const result = await downloadInto(CACHE_NAMES.tiles, plan.urls, setSaving, abortRef.current.signal)
     setSaving(undefined)
-    refresh()
-    if (abortRef.current.signal.aborted) showToast('Download cancelled — tiles saved so far are kept')
-    else if (result.failed > 0) showToast(`Area saved with ${result.failed} failed tile(s) — try again to retry them`)
-    else showToast(`Area saved for offline — ${fmtBytes(result.bytes)}`)
+    if (abortRef.current.signal.aborted) showToast('Download cancelled — tiles downloaded so far are kept')
+    else if (result.failed > 0)
+      showToast(`Area downloaded with ${result.failed} failed tile(s) — try again to retry them`)
+    else showToast(`Area downloaded for offline use — ${fmtBytes(result.bytes)}`)
   }
 
   const savePhotos = async () => {
@@ -171,32 +72,21 @@ export function OfflinePanel() {
     const result = await downloadInto(CACHE_NAMES.photos, urls, setSavingPhotos, abortRef.current.signal)
     setSavingPhotos(undefined)
     refresh()
-    if (!abortRef.current.signal.aborted) showToast(`Photos saved for offline — ${fmtBytes(result.bytes)}`)
+    if (!abortRef.current.signal.aborted) showToast(`Photos downloaded for offline use — ${fmtBytes(result.bytes)}`)
   }
-
-  const clear = async (name: string, label: string) => {
-    await clearCache(name)
-    refresh()
-    showToast(`${label} cleared`)
-  }
-
-  const pct = stats && stats.quota > 0 ? Math.max(1, Math.round((stats.usage / stats.quota) * 100)) : 0
 
   return (
     <div className="offline-panel">
-      <SyncCard />
-
       <p className="offline-intro">
-        Everything you browse is saved on this device and keeps working without signal. Heading somewhere remote? Save
+        Everything you browse is saved on this device and keeps working offline. Heading somewhere remote? Download
         the area first.
       </p>
 
       <div className="offline-card">
         <div className="offline-card-head">
-          <strong>Save this view</strong>
+          <strong>Download for offline use</strong>
           <span className="offline-sub">
-            {BASE_LAYERS[baseLayer]} layer · zoom {plan?.zFrom ?? Math.floor(mapView?.zoom ?? 0)}–
-            {plan?.zTo ?? MAX_SAVE_ZOOM}
+            {BASE_LAYERS[baseLayer]} layer · current zoom {(mapZoom ?? mapView?.zoom ?? 0).toFixed(1)}
           </span>
         </div>
         {saving ? (
@@ -213,14 +103,15 @@ export function OfflinePanel() {
             <div className="offline-row">
               <span className="offline-sub">
                 {plan?.urls.length ?? 0} tiles · ~{fmtBytes(plan?.estBytes ?? 0)}
+                {plan && ` · zoom ${plan.zFrom}–${plan.zTo}`}
               </span>
               <button className="btn btn-small btn-primary" onClick={saveArea} disabled={!online || !plan}>
-                {online ? 'Save area' : 'No connection'}
+                {online ? 'Download area' : 'No connection'}
               </button>
             </div>
             {plan && plan.zTo < MAX_SAVE_ZOOM && (
               <p className="offline-sub">
-                Large area — saved down to zoom {plan.zTo}. Zoom the map in for street-level detail.
+                Large area — downloaded down to zoom {plan.zTo}. Zoom the map in for street-level detail.
               </p>
             )}
           </>
@@ -239,81 +130,21 @@ export function OfflinePanel() {
         ) : (
           <div className="offline-row">
             <span className="offline-sub">
-              {stats
-                ? stats.photos.count >= thumbs.length
-                  ? `all saved · ${fmtBytes(stats.photos.bytes)}`
-                  : `${Math.min(stats.photos.count, thumbs.length)} saved so far · ${fmtBytes(stats.photos.bytes)}`
+              {photoStats
+                ? photoStats.count >= thumbs.length
+                  ? `all downloaded · ${fmtBytes(photoStats.bytes)}`
+                  : `${Math.min(photoStats.count, thumbs.length)} downloaded so far · ${fmtBytes(photoStats.bytes)}`
                 : '…'}
             </span>
             <button
               className="btn btn-small"
               onClick={savePhotos}
-              disabled={!online || (stats && stats.photos.count >= thumbs.length)}
+              disabled={!online || (photoStats && photoStats.count >= thumbs.length)}
             >
-              {stats && stats.photos.count >= thumbs.length ? 'All saved ✓' : 'Save all'}
+              {photoStats && photoStats.count >= thumbs.length ? 'All downloaded ✓' : 'Download all'}
             </button>
           </div>
         )}
-      </div>
-
-      <div className="offline-storage">
-        <div className="offline-card-head">
-          <strong>Storage</strong>
-          <span className="offline-sub">
-            {stats ? `${fmtBytes(stats.usage)} of ${fmtBytes(stats.quota)}` : 'measuring…'}
-          </span>
-        </div>
-        <div className="storage-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-          <span style={{ width: `${pct}%` }} />
-        </div>
-        {stats && (
-          <ul className="storage-rows">
-            <li>
-              <span>Map tiles</span>
-              <span className="offline-sub">
-                {fmtBytes(stats.tiles.bytes)} · {stats.tiles.count} tiles
-              </span>
-              {stats.tiles.count > 0 && !saving && (
-                <button className="btn btn-small btn-muted" onClick={() => clear(CACHE_NAMES.tiles, 'Map tiles')}>
-                  Clear
-                </button>
-              )}
-            </li>
-            <li>
-              <span>Photos</span>
-              <span className="offline-sub">
-                {fmtBytes(stats.photos.bytes)} · {stats.photos.count}
-              </span>
-              {stats.photos.count > 0 && !savingPhotos && (
-                <button className="btn btn-small btn-muted" onClick={() => clear(CACHE_NAMES.photos, 'Photos')}>
-                  Clear
-                </button>
-              )}
-            </li>
-            <li>
-              <span>App & dataset</span>
-              <span className="offline-sub">{fmtBytes(stats.app + stats.data.bytes)}</span>
-            </li>
-          </ul>
-        )}
-        {stats &&
-          (stats.persisted ? (
-            <p className="offline-sub persist-row">✓ Protected — the browser won't clean this up automatically</p>
-          ) : (
-            <div className="offline-row persist-row">
-              <span className="offline-sub">Saved maps can be evicted when disk runs low</span>
-              <button
-                className="btn btn-small"
-                onClick={async () => {
-                  const granted = await requestPersist()
-                  refresh()
-                  showToast(granted ? 'Storage protected' : 'The browser declined — install the app to enable this')
-                }}
-              >
-                Protect
-              </button>
-            </div>
-          ))}
       </div>
     </div>
   )

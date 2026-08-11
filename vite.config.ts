@@ -6,7 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': a new version waits until the user taps the in-app Update
+      // button — no surprise mid-session reloads.
+      registerType: 'prompt',
       manifest: {
         name: 'Bando Map',
         short_name: 'Bandos',
@@ -22,7 +24,6 @@ export default defineConfig({
       },
       workbox: {
         clientsClaim: true,
-        skipWaiting: true,
         // Precache only the app shell — dataset, thumbnails and tiles go into
         // named runtime caches the in-app Offline panel can show and clear.
         globPatterns: ['**/*.{js,css,html,svg}', 'pwa-*.png', 'apple-touch-icon.png'],
