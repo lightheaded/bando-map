@@ -18,16 +18,19 @@ The dataset (`public/data/bandos.json`) is committed, so the app works without r
 ## Refreshing the data
 
 ```sh
-npm run scrape     # ~3 min with default polite delays
+npm run scrape     # first run ~30–40 min with default polite delays; reruns are cached
 ```
 
-The scraper:
+The pipeline (`scripts/scrape/`):
 
-1. POSTs the search filter (`usage=768` "ei kasutata", `condition=766` "halb") to `register.muinas.ee` and walks the paginated results using the PHP session cookie. Row counts are validated against the register's own "Kokku: N" total.
-2. Geocodes each record's address with Maa-amet's free [In-ADS gazetteer](https://inaadress.maaamet.ee/) — no API key needed. Every point carries a `geocode` precision flag (`building` / `street` / `village`), since some register addresses are only village-level.
-3. Writes `public/data/bandos.json` (WGS84 + L-EST97 coordinates, photo ids, condition/usage).
+1. Scrapes the **full catalog** (~1,950 records): one unfiltered search plus one search per usage/condition value to attribute those fields (the register's list view doesn't show them; searches POST to a PHP session, pagination reuses the cookie). Row counts are validated against the register's own "Kokku: N" totals.
+2. Marks **candidates** — records that are unused (*ei kasutata*) or in poor condition (*halb*).
+3. Geocodes candidates with Maa-amet's free [In-ADS gazetteer](https://inaadress.maaamet.ee/) — no API key. Every point carries a `geocode` precision flag (`building` / `street` / `village`), since some register addresses are only village-level.
+4. Applies manual coordinate fixes from `data/overrides.json` (`geocode: "manual"` — wins over everything). Cross-referencing the official monument register was tried and dropped: the two catalogs name buildings too differently for reliable matching.
+5. Downloads one photo per candidate and stores a 480px webp in `public/thumbs/` (local thumbnails keep the map fast and are a step toward full offline use).
+6. Writes `public/data/bandos.json` (geocoded candidates, used by the app) and `data/catalog.json` (everything).
 
-`SCRAPE_DELAY_MS` (default 3000) tunes the delay between register requests. Be considerate — it's a small public heritage service.
+Everything is disk-cached under `data/cache/` (gitignored) — delete it for a fresh run. `SCRAPE_DELAY_MS` (default 3000) and `IMAGE_DELAY_MS` (default 1500) tune request pacing. Be considerate — it's a small public heritage service.
 
 ## Architecture
 
@@ -39,9 +42,9 @@ The scraper:
 ## Roadmap
 
 - [x] **Phase 0 — POC**: scrape the ~116 unused/poor-condition buildings, geocode, show clustered on the map with photos and detail panel
-- [ ] **Phase 1 — Full data pipeline**: all ~1,944 catalog records with usage/condition attribution, coordinate cross-referencing against the official monument register, local thumbnails, manual coordinate overrides
+- [x] **Phase 1 — Full data pipeline**: all catalog records with usage/condition attribution, local thumbnails, manual coordinate overrides
 - [ ] **Phase 2 — User state**: visited / hide / 1–5 stars / comment, filters, JSON export/import
-- [ ] **Phase 3 — Polish**: photo markers at high zoom, better mobile bottom sheet, offline support
+- [ ] **Phase 3 — Polish & offline**: photo markers at high zoom, full offline support in the field (PWA: app shell, dataset, thumbnails, and visited-area map tiles cached locally)
 - [ ] **Phase 4 — Ideas**: accounts with SSO for cross-device sync, auto-graded attributes (remote vs urban), periodic scraping
 
 ## Attribution
