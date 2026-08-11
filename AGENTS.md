@@ -36,8 +36,9 @@ The token needs the `project` scope (`gh auth refresh -s project,read:project`).
   see `infra/main.tf` and `.github/workflows/deploy.yml`). Don't push half-done work.
 - The sync backend (`backend/handler.mjs`, `infra/backend.tf` — Cognito + HTTP API +
   Lambda + DynamoDB at api.bando.lagle.xyz) deploys via `terraform -chdir=infra apply`,
-  NOT via the GitHub workflow. AWS credentials are provided locally (details
-  deliberately undocumented); the SPA-side ids live in `src/sync/config.ts`. Keep it $0 idle:
+  NOT via the GitHub workflow. It needs locally available AWS credentials — how they
+  are obtained is deliberately not documented here; credentials never live in the repo
+  or CI. The SPA-side ids live in `src/sync/config.ts`. Keep it $0 idle:
   on-demand/per-request services only, no provisioned capacity.
 - The dataset is built by `npm run scrape` (see README). Be polite to register.muinas.ee:
   keep the default delays, never run the pipeline while `npm run dev` is serving (writes
