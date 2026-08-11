@@ -186,6 +186,133 @@ body,
   flex-wrap: wrap;
 }
 
+.map-container.picking {
+  cursor: crosshair;
+}
+
+.map-container.picking canvas {
+  cursor: crosshair !important;
+}
+
+fieldset {
+  border: none;
+}
+
+fieldset legend {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.county-list {
+  max-height: 130px;
+  overflow-y: auto;
+}
+
+.checks .checkbox {
+  flex-basis: calc(50% - 6px);
+}
+
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-line {
+  display: flex;
+  align-items: center;
+  gap: 5px 6px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: #666;
+  border-top: 1px solid #eee;
+  padding-top: 9px;
+}
+
+.legend-line .dot {
+  margin-left: 6px;
+}
+
+.legend-line .dot:first-child {
+  margin-left: 0;
+}
+
+/* Add place form */
+.add-place-form {
+  position: absolute;
+  z-index: 30;
+  top: 56px;
+  left: 10px;
+  width: 260px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: panel-in 0.15s ease-out;
+}
+
+@media (max-width: 640px) {
+  .add-place-form {
+    left: 10px;
+    right: 10px;
+    width: auto;
+  }
+}
+
+.add-place-form h3 {
+  font-size: 15px;
+}
+
+.add-place-form .coords-note {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: #666;
+}
+
+.add-place-form input,
+.add-place-form textarea {
+  width: 100%;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+/* Workflow state buttons */
+.btn-shortlisted {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.btn-shortlisted:hover {
+  background: #bfdbfe;
+  border-color: #60a5fa;
+}
+
+.btn-rejected {
+  background: #e4e4e7;
+  border-color: #a1a1aa;
+  color: #3f3f46;
+}
+
+.btn-rejected:hover {
+  background: #d4d4d8;
+}
+
 /* Stars */
 .stars {
   display: inline-flex;

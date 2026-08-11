@@ -18,9 +18,9 @@ function maaametSource(layer: string, ext: 'png' | 'jpg', minzoom: number): Rast
 }
 
 export const BASE_LAYERS = {
-  kaart: 'Kaart',
-  foto: 'Orto',
-  hybriid: 'Hübriid',
+  kaart: 'Map',
+  foto: 'Aerial',
+  hybriid: 'Hybrid',
 } as const
 
 export type BaseLayerId = keyof typeof BASE_LAYERS

@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore, downloadUserData } from '../state/marks'
 import { useFilteredBandos, activeFilterCount } from '../state/filters'
-import { USAGE_VALUES, CONDITION_VALUES } from '../types'
+import { USAGE_VALUES, CONDITION_VALUES, EN, type TriageStatus } from '../types'
 
 export function FilterButton() {
   const open = useAppStore((s) => s.filtersOpen)
@@ -16,6 +16,13 @@ export function FilterButton() {
     </button>
   )
 }
+
+function toggle<T>(list: T[], value: T): T[] {
+  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
+}
+
+const STATUS_LABELS: Record<TriageStatus, string> = { new: 'New', shortlisted: 'Shortlisted', rejected: 'Rejected' }
+const STATUS_DOTS: Record<TriageStatus, string> = { new: '#e11d48', shortlisted: '#2563eb', rejected: '#71717a' }
 
 export function FilterPanel() {
   const open = useAppStore((s) => s.filtersOpen)
@@ -34,7 +41,7 @@ export function FilterPanel() {
   const onImportFile = async (file: File) => {
     try {
       const { merged } = importData(JSON.parse(await file.text()))
-      showToast(`Imported — ${merged} mark(s) added or updated`)
+      showToast(`Imported — ${merged} item(s) added or updated`)
     } catch (err) {
       showToast(`Import failed: ${err instanceof Error ? err.message : 'unreadable file'}`)
     }
@@ -44,43 +51,26 @@ export function FilterPanel() {
     <div className="filter-panel">
       <input
         type="search"
-        placeholder="Search name or place…"
+        placeholder="Search names, places, your notes…"
         value={filters.search}
         onChange={(e) => setFilters({ search: e.target.value })}
       />
-      <label>
-        Kasutus
-        <select value={filters.usage} onChange={(e) => setFilters({ usage: e.target.value })}>
-          <option value="any">kõik</option>
-          {USAGE_VALUES.map((u) => (
-            <option key={u} value={u}>
-              {u}
-            </option>
+      <fieldset>
+        <legend>Status</legend>
+        <div className="checks">
+          {(Object.keys(STATUS_LABELS) as TriageStatus[]).map((s) => (
+            <label key={s} className="checkbox">
+              <input
+                type="checkbox"
+                checked={filters.status.includes(s)}
+                onChange={() => setFilters({ status: toggle(filters.status, s) })}
+              />
+              <span className="dot" style={{ background: STATUS_DOTS[s] }} />
+              {STATUS_LABELS[s]}
+            </label>
           ))}
-        </select>
-      </label>
-      <label>
-        Seisukord
-        <select value={filters.condition} onChange={(e) => setFilters({ condition: e.target.value })}>
-          <option value="any">kõik</option>
-          {CONDITION_VALUES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Maakond
-        <select value={filters.county} onChange={(e) => setFilters({ county: e.target.value })}>
-          <option value="any">kõik</option>
-          {counties.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </label>
+        </div>
+      </fieldset>
       <div className="segmented" role="radiogroup" aria-label="Visited">
         {(['all', 'unvisited', 'visited'] as const).map((v) => (
           <button
@@ -94,6 +84,51 @@ export function FilterPanel() {
           </button>
         ))}
       </div>
+      <fieldset>
+        <legend>Usage</legend>
+        <div className="checks">
+          {USAGE_VALUES.map((u) => (
+            <label key={u} className="checkbox">
+              <input
+                type="checkbox"
+                checked={filters.usage.includes(u)}
+                onChange={() => setFilters({ usage: toggle(filters.usage, u) })}
+              />
+              {EN[u]}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Condition</legend>
+        <div className="checks">
+          {CONDITION_VALUES.map((c) => (
+            <label key={c} className="checkbox">
+              <input
+                type="checkbox"
+                checked={filters.condition.includes(c)}
+                onChange={() => setFilters({ condition: toggle(filters.condition, c) })}
+              />
+              {EN[c]}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>County</legend>
+        <div className="checks county-list">
+          {counties.map((c) => (
+            <label key={c} className="checkbox">
+              <input
+                type="checkbox"
+                checked={filters.county.includes(c)}
+                onChange={() => setFilters({ county: toggle(filters.county, c) })}
+              />
+              {c.replace(' maakond', '')}
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <label className="stars-filter">
         Min rating
         <span className="stars" role="radiogroup" aria-label="Minimum rating">
@@ -109,14 +144,6 @@ export function FilterPanel() {
             </button>
           ))}
         </span>
-      </label>
-      <label className="checkbox">
-        <input
-          type="checkbox"
-          checked={filters.showHidden}
-          onChange={(e) => setFilters({ showHidden: e.target.checked })}
-        />
-        Show hidden
       </label>
       <div className="filter-actions">
         <button className="btn btn-small" onClick={resetFilters}>
@@ -140,6 +167,12 @@ export function FilterPanel() {
           }}
         />
       </div>
+      <p className="legend-line">
+        <span className="dot" style={{ background: '#e11d48' }} /> new
+        <span className="dot" style={{ background: '#2563eb' }} /> shortlisted
+        <span className="dot" style={{ background: '#059669' }} /> visited
+        <span className="dot" style={{ background: '#71717a' }} /> rejected
+      </p>
     </div>
   )
 }

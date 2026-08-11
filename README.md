@@ -36,7 +36,10 @@ Everything is disk-cached under `data/cache/` (gitignored) — delete it for a f
 
 - **Vite + React + TypeScript**, [MapLibre GL JS](https://maplibre.org/) for the map (WebGL, built-in clustering, smooth on mobile).
 - Map tiles: Maa-amet public TMS (`kaart@GMC`, `foto@GMC`, `hybriid@GMC` — EPSG:3857, TMS y-axis).
-- All user state (visited / hidden / ratings / comments — coming in Phase 2) lives in the browser's localStorage and will be exportable as JSON. No backend, no accounts, no tracking.
+- All user state lives in the browser's localStorage, exportable/importable as JSON. No backend, no accounts, no tracking.
+- **Workflow**: triage spots online — *Shortlist* the promising ones, *Reject* the duds (hidden by default, recoverable via filters) — then mark them *Visited* in the field and rate 1–5 stars with notes. Marker colors: red = new, blue = shortlisted, green = visited, gray = rejected.
+- **Custom places**: add your own spots (name + notes, no photos) straight onto the map; they live in localStorage and ride along in exports.
+- **Deep links**: selecting a spot puts `#b/<id>@<lat>,<lon>` in the URL — share it, and if the receiver doesn't have that spot, the map zooms to the coordinates instead.
 - `src/types.ts` is the single schema shared by the app and the scraper.
 
 ## Roadmap

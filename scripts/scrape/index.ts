@@ -104,7 +104,10 @@ async function main() {
       bando.geocode = 'manual'
     }
     if (rec.photos.length > 0) {
-      bando.thumb = await ensureThumb(rec.id, rec.photos[0])
+      bando.thumbs = []
+      for (const [i, photoId] of rec.photos.entries()) {
+        bando.thumbs.push((await ensureThumb(rec.id, photoId, i === 0)) ?? null)
+      }
     }
     bandos.push(bando)
   }
