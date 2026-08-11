@@ -23,6 +23,44 @@ body,
   cursor: crosshair !important;
 }
 
+/* ============ Photo markers (zoom >= 14) ============ */
+.photo-marker-wrap:hover,
+.photo-marker-wrap.selected {
+  z-index: 1;
+}
+
+.photo-marker {
+  display: block;
+  width: 52px;
+  height: 39px;
+  padding: 0;
+  border: 2px solid #e11d48; /* actual color set per status from JS */
+  border-radius: 9px;
+  background: #fff center / cover no-repeat;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+
+.photo-marker:hover {
+  transform: scale(1.12);
+}
+
+.photo-marker-wrap.selected .photo-marker {
+  outline: 3px solid #fbbf24;
+}
+
+.photo-marker.no-photo {
+  color: #a1a1aa;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* While placing/moving a pin, taps must reach the map, not the markers. */
+.map-container.picking .photo-marker {
+  pointer-events: none;
+}
+
 :focus-visible {
   outline: 2px solid #e11d48;
   outline-offset: 2px;

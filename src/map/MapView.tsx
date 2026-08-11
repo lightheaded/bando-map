@@ -6,10 +6,12 @@ import { mapStyle, applyBaseLayer } from './layers'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { useFilteredBandos, resolveBando } from '../state/filters'
-import type { Bando, UserMark } from '../types'
+import { PHOTO_URL, type Bando, type UserMark } from '../types'
 
 const ESTONIA_BOUNDS: [number, number, number, number] = [21.5, 57.4, 28.3, 59.8]
 const VIEW_KEY = 'bando-map:view'
+/** From this zoom up, dots become photo markers (clustering ends at 13). */
+const PHOTO_MARKER_ZOOM = 14
 
 const isMobile = () => window.matchMedia('(max-width: 640px)').matches
 
@@ -41,6 +43,81 @@ const STATUS_COLOR = [
   '#e11d48',
 ] as maplibregl.ExpressionSpecification
 
+const statusColor = (mark?: UserMark) =>
+  mark?.status === 'rejected'
+    ? '#71717a'
+    : mark?.visited
+      ? '#059669'
+      : mark?.status === 'shortlisted'
+        ? '#2563eb'
+        : '#e11d48'
+
+// MapLibre positions the marker element with an inline transform, so the
+// scalable button lives inside a wrapper div that MapLibre owns.
+function buildPhotoMarkerEl(b: Bando): HTMLDivElement {
+  const wrap = document.createElement('div')
+  wrap.className = 'photo-marker-wrap'
+  const el = document.createElement('button')
+  el.type = 'button'
+  el.className = 'photo-marker'
+  el.title = b.name
+  const thumb = b.thumbs?.find(Boolean)
+  if (thumb) {
+    el.style.backgroundImage = `url(${import.meta.env.BASE_URL}${thumb})`
+  } else if (b.photos.length) {
+    el.style.backgroundImage = `url(${PHOTO_URL(b.photos[0])})`
+  } else {
+    el.classList.add('no-photo')
+    el.textContent = b.custom ? '★' : '▢'
+  }
+  el.addEventListener('click', (e) => {
+    e.stopPropagation()
+    useAppStore.getState().select(b.id)
+  })
+  wrap.appendChild(el)
+  return wrap
+}
+
+/**
+ * Above PHOTO_MARKER_ZOOM the circle layers hide (maxzoom) and every filtered
+ * bando in the viewport gets an HTML marker with its photo thumbnail instead,
+ * so spots are recognizable at a glance. Diffed in place: existing markers are
+ * kept, stale ones removed.
+ */
+function syncPhotoMarkers(
+  map: maplibregl.Map,
+  markers: Map<number, maplibregl.Marker>,
+  bandos: Bando[],
+  marks: Record<number, UserMark>,
+  selectedId: number | undefined,
+) {
+  const wanted = new Map<number, Bando>()
+  if (map.getZoom() >= PHOTO_MARKER_ZOOM) {
+    const bounds = map.getBounds()
+    for (const b of bandos) if (bounds.contains([b.lon, b.lat])) wanted.set(b.id, b)
+  }
+  for (const [id, marker] of markers) {
+    if (!wanted.has(id)) {
+      marker.remove()
+      markers.delete(id)
+    }
+  }
+  for (const [id, b] of wanted) {
+    let marker = markers.get(id)
+    if (!marker) {
+      marker = new maplibregl.Marker({ element: buildPhotoMarkerEl(b), anchor: 'center' })
+        .setLngLat([b.lon, b.lat])
+        .addTo(map)
+      markers.set(id, marker)
+    } else {
+      marker.setLngLat([b.lon, b.lat]) // a Move fix may have shifted it
+    }
+    const wrap = marker.getElement()
+    wrap.classList.toggle('selected', id === selectedId)
+    ;(wrap.firstElementChild as HTMLElement).style.borderColor = statusColor(marks[id])
+  }
+}
+
 function toGeoJSON(bandos: Bando[], marks: Record<number, UserMark>): FeatureCollection {
   return {
     type: 'FeatureCollection',
@@ -60,6 +137,9 @@ function toGeoJSON(bandos: Bando[], marks: Record<number, UserMark>): FeatureCol
 export function MapView() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | undefined>(undefined)
+  const markersRef = useRef(new Map<number, maplibregl.Marker>())
+  // Latest-props closure for map event handlers registered once on load.
+  const syncMarkersRef = useRef(() => {})
   const [sourceReady, setSourceReady] = useState(false)
   const bandos = useFilteredBandos()
   const bandosRef = useRef(bandos)
@@ -113,6 +193,9 @@ export function MapView() {
       sessionStorage.setItem(VIEW_KEY, JSON.stringify({ center: [c.lng, c.lat], zoom: map.getZoom() }))
     }
     map.on('moveend', publishView)
+    // 'zoom' catches the dot→photo handover mid-gesture; 'moveend' catches pans.
+    map.on('zoom', () => syncMarkersRef.current())
+    map.on('moveend', () => syncMarkersRef.current())
 
     map.on('load', () => {
       publishView()
@@ -154,6 +237,7 @@ export function MapView() {
         type: 'circle',
         source: 'bandos',
         filter: ['!', ['has', 'point_count']],
+        maxzoom: PHOTO_MARKER_ZOOM, // photo markers take over from here
         paint: {
           'circle-color': STATUS_COLOR,
           'circle-radius': 8,
@@ -166,6 +250,7 @@ export function MapView() {
         type: 'circle',
         source: 'bandos',
         filter: ['==', ['get', 'id'], -0.5],
+        maxzoom: PHOTO_MARKER_ZOOM, // the photo marker carries the selection ring
         paint: {
           'circle-color': STATUS_COLOR,
           'circle-radius': 11,
@@ -218,7 +303,9 @@ export function MapView() {
     })
 
     return () => {
-      map.remove()
+      map.remove() // takes the marker DOM down with it
+      markersRef.current.clear()
+      syncMarkersRef.current = () => {}
       mapRef.current = undefined
     }
   }, [select])
@@ -228,6 +315,15 @@ export function MapView() {
     if (!map || !sourceReady) return
     ;(map.getSource('bandos') as maplibregl.GeoJSONSource | undefined)?.setData(toGeoJSON(bandos, marks))
   }, [bandos, marks, sourceReady])
+
+  // Photo markers: re-sync when the data, marks or selection change; the map
+  // event handlers above re-sync on zoom/pan via syncMarkersRef.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !sourceReady) return
+    syncMarkersRef.current = () => syncPhotoMarkers(map, markersRef.current, bandos, marks, selectedId)
+    syncMarkersRef.current()
+  }, [bandos, marks, selectedId, sourceReady])
 
   useEffect(() => {
     const map = mapRef.current
