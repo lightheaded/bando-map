@@ -242,6 +242,47 @@ resource "aws_iam_role_policy" "github_deploy" {
   })
 }
 
+# ---------- Cost guard ----------
+# CloudFront's permanent free tier covers 1 TB/month egress; this is the
+# backstop that emails before a runaway bill. Set alert_email to enable.
+
+variable "alert_email" {
+  description = "Email for the monthly cost-budget alert; null disables the budget"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "budget_limit_usd" {
+  type    = number
+  default = 15
+}
+
+resource "aws_budgets_budget" "monthly" {
+  count        = var.alert_email == null ? 0 : 1
+  name         = "monthly-cost-guard"
+  budget_type  = "COST"
+  limit_amount = tostring(var.budget_limit_usd)
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 80
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.alert_email]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = [var.alert_email]
+  }
+}
+
 # ---------- Outputs ----------
 
 output "bucket" {

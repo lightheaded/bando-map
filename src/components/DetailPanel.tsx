@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { placeToBando } from '../state/filters'
-import { en, MUINAS_DETAIL_URL, PHOTO_URL, GMAPS_URL, GMAPS_DIRECTIONS_URL, XGIS_URL } from '../types'
+import { en, ICON, MUINAS_DETAIL_URL, PHOTO_URL, PDF_URL, GMAPS_URL, GMAPS_DIRECTIONS_URL, XGIS_URL } from '../types'
+
+function Chip({ value, className }: { value: string; className?: string }) {
+  return (
+    <span className={`chip ${className ?? ''}`}>
+      {ICON[value] && <span className="chip-icon">{ICON[value]}</span>}
+      {en(value)}
+    </span>
+  )
+}
 
 export function DetailContent() {
   const selectedId = useAppStore((s) => s.selectedId)
@@ -56,17 +65,15 @@ export function DetailContent() {
         {item.custom ? 'Custom place' : `${item.address}, ${item.municipality}, ${item.county}`}
       </p>
       <div className="chips">
-        {item.period && <span className="chip">{en(item.period)}</span>}
-        {item.usage && <span className="chip">{en(item.usage)}</span>}
-        {item.condition && (
-          <span className={`chip ${item.condition === 'halb' ? 'chip-bad' : ''}`}>{en(item.condition)}</span>
-        )}
-        {!item.custom && item.geocode !== 'building' && (
+        {item.period && <Chip value={item.period} />}
+        {item.usage && <Chip value={item.usage} />}
+        {item.condition && <Chip value={item.condition} className={item.condition === 'halb' ? 'chip-bad' : ''} />}
+        {(item.geocode === 'street' || item.geocode === 'village') && (
           <span className="chip chip-warn" title="Coordinate is approximate — geocoded from an imprecise address">
             ~{item.geocode} accuracy
           </span>
         )}
-        {item.custom && <span className="chip">yours</span>}
+        {item.custom && <span className="chip">📍 yours</span>}
       </div>
       {item.photos.length > 0 && (
         <div className="photos">
@@ -175,6 +182,11 @@ export function DetailContent() {
         {!item.custom && (
           <a className="btn" href={MUINAS_DETAIL_URL(item.id)} target="_blank" rel="noreferrer">
             muinas.ee
+          </a>
+        )}
+        {!item.custom && (
+          <a className="btn" href={PDF_URL(item.id)} target="_blank" rel="noreferrer" title="Register PDF (archived)">
+            PDF
           </a>
         )}
         <a className="btn btn-primary" href={GMAPS_DIRECTIONS_URL(item.lat, item.lon)} target="_blank" rel="noreferrer">
