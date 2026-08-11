@@ -2,29 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 
-export function AddPlaceButton() {
-  const placeDraft = useAppStore((s) => s.placeDraft)
-  const setPlaceDraft = useAppStore((s) => s.setPlaceDraft)
-  const showToast = useAppStore((s) => s.showToast)
-  const picking = placeDraft === 'picking'
-  return (
-    <button
-      className={`filter-button ${picking ? 'active' : ''}`}
-      title="Add your own spot"
-      onClick={() => {
-        if (picking) {
-          setPlaceDraft(undefined)
-        } else {
-          setPlaceDraft('picking')
-          showToast('Tap the map where the spot is')
-        }
-      }}
-    >
-      {picking ? 'Cancel' : '+ Add'}
-    </button>
-  )
-}
-
+// The add flow starts from the Contribute panel ("+ Add a place").
 export function AddPlaceForm() {
   const placeDraft = useAppStore((s) => s.placeDraft)
   const setPlaceDraft = useAppStore((s) => s.setPlaceDraft)

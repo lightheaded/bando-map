@@ -5,7 +5,9 @@
  */
 import { useAppStore } from '../state/store'
 import { useMarksStore, exportUserData } from '../state/marks'
-import { SYNC, syncEnabled } from './config'
+import { refreshSubmissions } from '../state/contrib'
+import { refreshAdminOverview } from '../state/admin'
+import { SYNC, syncEnabled, isAdmin } from './config'
 import { completeSignIn, getIdToken, sessionEmail, signOut as authSignOut } from './auth'
 
 let syncing = false
@@ -56,9 +58,12 @@ export function signOut() {
 export function initSync() {
   if (!syncEnabled()) return
   completeSignIn().then(() => {
-    if (sessionEmail()) {
-      setSync({ email: sessionEmail() })
+    const email = sessionEmail()
+    if (email) {
+      setSync({ email })
       syncNow()
+      refreshSubmissions()
+      if (isAdmin(email)) refreshAdminOverview() // populates the Admin tab badge
     }
   })
   // Any local edit schedules a push (debounced; the merge makes it idempotent).

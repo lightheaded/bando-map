@@ -61,7 +61,7 @@ function EditForm({ raw, item, onClose }: { raw: Bando; item: Bando; onClose: ()
       setMark(item.id, { edits: Object.keys(edits).length ? edits : undefined })
       showToast(
         Object.keys(edits).length
-          ? 'Corrections saved — use "Copy fixes" in filters to feed them back to the dataset'
+          ? 'Correction saved — submit it to the shared map from Contribute'
           : 'No changes from the register data',
       )
     }
@@ -204,7 +204,11 @@ export function DetailContent() {
         <>
           <h2>{item.name}</h2>
           <p className="address">
-            {item.custom ? 'Custom place' : `${item.address}, ${item.municipality}, ${item.county}`}
+            {item.custom
+              ? 'Custom place'
+              : item.community
+                ? 'Community spot'
+                : `${item.address}, ${item.municipality}, ${item.county}`}
           </p>
           <div className="chips">
             {item.period && <Chip value={item.period} />}
@@ -216,6 +220,7 @@ export function DetailContent() {
               </span>
             )}
             {item.custom && <span className="chip">📍 yours</span>}
+            {item.community && <span className="chip">🌍 community</span>}
             {mark?.fix && <span className="chip">📌 moved</span>}
             {mark?.edits && <span className="chip">✏️ edited</span>}
           </div>
@@ -338,7 +343,7 @@ export function DetailContent() {
         <a className="btn" href={XGIS_URL(lest.x, lest.y)} target="_blank" rel="noreferrer">
           XGIS
         </a>
-        {!item.custom && (
+        {!item.custom && !item.community && (
           <a className="btn" href={MUINAS_DETAIL_URL(item.id)} target="_blank" rel="noreferrer">
             muinas.ee
           </a>
