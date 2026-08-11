@@ -41,11 +41,17 @@ const SYNCED_ITEMS = [
 ]
 
 const SyncedItems = () => (
-  <ul className="sync-items">
-    {SYNCED_ITEMS.map((item) => (
-      <li key={item}>{item}</li>
-    ))}
-  </ul>
+  <>
+    <ul className="sync-items">
+      {SYNCED_ITEMS.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
+    <p className="offline-sub sync-private">
+      Synced privately to your account — nothing is shared with others unless you submit it for review in
+      Contribute.
+    </p>
+  </>
 )
 
 /** Cross-device sync: sign-in offer, or status + manual sync when signed in. */

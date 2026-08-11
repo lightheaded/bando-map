@@ -20,6 +20,13 @@ function panelPadding(): { top: number; left: number; right: number; bottom: num
     : { top: 0, left: 380, right: 0, bottom: 0 }
 }
 
+const withMargin = (p: { top: number; left: number; right: number; bottom: number }, m: number) => ({
+  top: p.top + m,
+  left: p.left + m,
+  right: p.right + m,
+  bottom: p.bottom + m,
+})
+
 /** Survives dev-server reloads and accidental refreshes. */
 function savedView(): { center: [number, number]; zoom: number } | undefined {
   try {
@@ -418,7 +425,9 @@ export function MapView() {
           [Math.min(...lons), Math.min(...lats)],
           [Math.max(...lons), Math.max(...lats)],
         ],
-        { padding: panelPadding(), maxZoom: 16, duration: 500 },
+        // Extra margin beyond the panel padding, so neither diff point sits
+        // clipped at the viewport edge.
+        { padding: withMargin(panelPadding(), 40), maxZoom: 16, duration: 500 },
       )
     }
     source.setData({ type: 'FeatureCollection', features })

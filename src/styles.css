@@ -1035,6 +1035,17 @@ fieldset legend {
   color: #059669;
 }
 
+.sync-private {
+  border-top: 1px solid #f0eef0;
+  padding-top: 6px;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 7px;
+}
+
 .admin-stats {
   display: flex;
   justify-content: space-between;

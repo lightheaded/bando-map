@@ -5,7 +5,7 @@ import { postSubmission } from '../sync/api'
 import { syncEnabled } from '../sync/config'
 import { signIn } from '../sync/auth'
 import { useOnline } from './useOnline'
-import { EditIcon } from './icons'
+import { EditIcon, MapPinIcon } from './icons'
 import type { Submission } from '../types'
 
 export function ContributeButton() {
@@ -57,6 +57,7 @@ export function ContributePanel() {
   const changes = useLocalChanges()
   const submissions = useContribStore((s) => s.submissions)
   const online = useOnline()
+  const select = useAppStore((s) => s.select)
   const [excluded, setExcluded] = useState<Set<number>>(new Set())
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -87,6 +88,7 @@ export function ContributePanel() {
       else next.add(id)
       return next
     })
+
 
   const submit = async () => {
     setSubmitting(true)
@@ -139,10 +141,20 @@ export function ContributePanel() {
           <ul className="change-rows">
             {changes.map((c) => (
               <li key={c.targetId}>
-                <label className="checkbox">
-                  <input type="checkbox" checked={!excluded.has(c.targetId)} onChange={() => toggleRow(c.targetId)} />
-                  <span className="change-name">{c.name}</span>
-                </label>
+                <div className="offline-row">
+                  <label className="checkbox">
+                    <input type="checkbox" checked={!excluded.has(c.targetId)} onChange={() => toggleRow(c.targetId)} />
+                    <span className="change-name">{c.name}</span>
+                  </label>
+                  <button
+                    className="btn btn-small btn-icon"
+                    title="Show on the map"
+                    aria-label={`Show ${c.name} on the map`}
+                    onClick={() => select(c.targetId)}
+                  >
+                    <MapPinIcon />
+                  </button>
+                </div>
                 <span className="offline-sub">
                   {c.summary}
                   {c.rejected && <span className="sub-status rejected"> · was rejected: {c.rejected.reason}</span>}
