@@ -31,7 +31,7 @@ interface AppState {
   sheetOpen: boolean
   /** Cross-device sync status (email set = signed in). */
   sync: { email?: string; state: 'idle' | 'syncing' | 'error'; lastAt?: number }
-  /** Set when a new app version is waiting — call it to activate and reload. */
+  /** Set when a new app version has activated in the background — call it to reload into it. */
   updateApp?: () => void
   setDataset: (d: BandoDataset) => void
   select: (id?: number) => void

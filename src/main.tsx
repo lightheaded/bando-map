@@ -5,12 +5,13 @@ import { useAppStore } from './state/store'
 import App from './App'
 import './styles.css'
 
-const updateSW = registerSW({
+registerSW({
   immediate: true,
-  // A new version is waiting: surface a toast now and keep a persistent
-  // Update button in the sidebar controls until the user takes it.
-  onNeedRefresh() {
-    const update = () => updateSW(true)
+  // A new version already activated in the background (the next refresh gets
+  // it either way) — instead of the default forced reload, surface a toast
+  // and a persistent Update button so the user reloads when it suits them.
+  onNeedReload() {
+    const update = () => window.location.reload()
     useAppStore.setState({ updateApp: update })
     useAppStore.getState().showToast('A new version is available', { label: 'Update', onClick: update })
   },
