@@ -16,10 +16,15 @@ export interface Bando {
   /** L-EST97 (EPSG:3301) easting/northing, for xgis.maaamet.ee links. */
   lestX?: number
   lestY?: number
-  /** How the coordinate was obtained — building is exact, village is a settlement centroid. */
-  geocode: 'building' | 'street' | 'village' | 'manual'
+  /**
+   * How the coordinate was obtained — building/monument/manual are exact,
+   * street and village are approximate centroids.
+   */
+  geocode: 'building' | 'street' | 'village' | 'monument' | 'manual'
   /** Photo ids under register.muinas.ee/content/architecture/regular/<photoId>.jpg */
   photos: number[]
+  /** Local thumbnail path relative to the app base, e.g. "thumbs/45.webp". */
+  thumb?: string
 }
 
 export interface BandoDataset {
@@ -42,6 +47,9 @@ export interface UserData {
   version: 1
   marks: Record<number, UserMark>
 }
+
+export const USAGE_VALUES = ['ei kasutata', 'elumaja', 'kasutusel', 'koolimaja', 'sakraalhoone', 'tuletorn'] as const
+export const CONDITION_VALUES = ['halb', 'rahuldav', 'hea'] as const
 
 export const MUINAS_DETAIL_URL = (id: number) =>
   `https://register.muinas.ee/public.php?menuID=architecture&action=view&id=${id}`
