@@ -1,21 +1,23 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import type { FeatureCollection, Point } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { mapStyle, applyBaseLayer } from './layers'
 import { useAppStore } from '../state/store'
-import type { Bando } from '../types'
+import { useMarksStore } from '../state/marks'
+import { useFilteredBandos } from '../state/filters'
+import type { Bando, UserMark } from '../types'
 
 const ESTONIA_BOUNDS: [number, number, number, number] = [21.5, 57.4, 28.3, 59.8]
 
-function toGeoJSON(bandos: Bando[]): FeatureCollection {
+function toGeoJSON(bandos: Bando[], marks: Record<number, UserMark>): FeatureCollection {
   return {
     type: 'FeatureCollection',
     features: bandos.map((b) => ({
       type: 'Feature',
       id: b.id,
       geometry: { type: 'Point', coordinates: [b.lon, b.lat] },
-      properties: { id: b.id },
+      properties: { id: b.id, visited: marks[b.id]?.visited ?? false },
     })),
   }
 }
@@ -23,7 +25,9 @@ function toGeoJSON(bandos: Bando[]): FeatureCollection {
 export function MapView() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | undefined>(undefined)
-  const bandos = useAppStore((s) => s.bandos)
+  const [sourceReady, setSourceReady] = useState(false)
+  const bandos = useFilteredBandos()
+  const marks = useMarksStore((s) => s.marks)
   const baseLayer = useAppStore((s) => s.baseLayer)
   const select = useAppStore((s) => s.select)
   const selectedId = useAppStore((s) => s.selectedId)
@@ -53,11 +57,12 @@ export function MapView() {
     map.on('load', () => {
       map.addSource('bandos', {
         type: 'geojson',
-        data: toGeoJSON(useAppStore.getState().bandos),
+        data: { type: 'FeatureCollection', features: [] },
         cluster: true,
         clusterMaxZoom: 13,
         clusterRadius: 45,
       })
+      setSourceReady(true)
       map.addLayer({
         id: 'clusters',
         type: 'circle',
@@ -89,7 +94,7 @@ export function MapView() {
         source: 'bandos',
         filter: ['!', ['has', 'point_count']],
         paint: {
-          'circle-color': '#e11d48',
+          'circle-color': ['case', ['get', 'visited'], '#059669', '#e11d48'],
           'circle-radius': 8,
           'circle-stroke-width': 2,
           'circle-stroke-color': '#fff',
@@ -101,7 +106,7 @@ export function MapView() {
         source: 'bandos',
         filter: ['==', ['get', 'id'], -1],
         paint: {
-          'circle-color': '#e11d48',
+          'circle-color': ['case', ['get', 'visited'], '#059669', '#e11d48'],
           'circle-radius': 11,
           'circle-stroke-width': 3,
           'circle-stroke-color': '#fbbf24',
@@ -133,11 +138,9 @@ export function MapView() {
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
-    const update = () => (map.getSource('bandos') as maplibregl.GeoJSONSource | undefined)?.setData(toGeoJSON(bandos))
-    if (map.isStyleLoaded()) update()
-    else map.once('load', update)
-  }, [bandos])
+    if (!map || !sourceReady) return
+    ;(map.getSource('bandos') as maplibregl.GeoJSONSource | undefined)?.setData(toGeoJSON(bandos, marks))
+  }, [bandos, marks, sourceReady])
 
   useEffect(() => {
     const map = mapRef.current

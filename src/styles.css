@@ -23,12 +23,18 @@ body,
   outline-offset: 2px;
 }
 
-/* Layer switcher — top left segmented control */
-.layer-switcher {
+.top-left {
   position: absolute;
   top: 10px;
   left: 10px;
   z-index: 10;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+/* Layer switcher — top left segmented control */
+.layer-switcher {
   display: flex;
   background: rgba(255, 255, 255, 0.95);
   border-radius: 10px;
@@ -58,6 +64,197 @@ body,
 
 .layer-switcher button:focus-visible {
   outline-offset: -2px;
+}
+
+/* Filter button + panel */
+.filter-button {
+  border: none;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  padding: 9px 13px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.filter-button:hover {
+  background: #f1f1f2;
+}
+
+.filter-button.active {
+  background: #18181b;
+  color: #fff;
+}
+
+.filter-button .count {
+  display: inline-block;
+  background: #e11d48;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 1px 7px;
+  margin-left: 4px;
+}
+
+.filter-panel {
+  position: absolute;
+  z-index: 15;
+  top: 56px;
+  left: 10px;
+  width: 260px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: calc(100% - 70px);
+  overflow-y: auto;
+  animation: panel-in 0.15s ease-out;
+}
+
+@media (max-width: 640px) {
+  .filter-panel {
+    left: 10px;
+    right: 10px;
+    width: auto;
+  }
+}
+
+.filter-panel input[type='search'],
+.filter-panel select {
+  width: 100%;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 13px;
+  background: #fff;
+  color: #333;
+}
+
+.filter-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: #666;
+}
+
+.filter-panel .checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.segmented button {
+  flex: 1;
+  border: none;
+  background: #fff;
+  padding: 7px 0;
+  font-size: 12px;
+  cursor: pointer;
+  color: #333;
+  transition: background 0.15s;
+}
+
+.segmented button:hover {
+  background: #f4f4f5;
+}
+
+.segmented button.active {
+  background: #18181b;
+  color: #fff;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Stars */
+.stars {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.star {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  color: #d4d4d8;
+  cursor: pointer;
+  padding: 2px;
+  transition: color 0.1s, transform 0.1s;
+}
+
+.star:hover {
+  transform: scale(1.15);
+}
+
+.star.on {
+  color: #f59e0b;
+}
+
+.stars-filter {
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Mark actions in detail panel */
+.mark-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.btn-visited {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.btn-visited:hover {
+  background: #bbf7d0;
+  border-color: #4ade80;
+}
+
+.btn-muted {
+  color: #777;
+}
+
+.comment {
+  width: 100%;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  margin-bottom: 12px;
+  color: #333;
+}
+
+.comment::placeholder {
+  color: #a1a1aa;
 }
 
 /* Detail panel — desktop: full-height right dock; mobile: bottom sheet */
