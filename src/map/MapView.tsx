@@ -187,7 +187,10 @@ export function MapView() {
     map.on('moveend', publishView)
     // 'zoom' catches the cluster→photo handover mid-gesture, 'moveend' pans,
     // and 'sourcedata' the async cluster recomputation after zoom/setData.
-    map.on('zoom', () => syncMarkersRef.current())
+    map.on('zoom', () => {
+      syncMarkersRef.current()
+      useAppStore.getState().setMapZoom(map.getZoom())
+    })
     map.on('moveend', () => syncMarkersRef.current())
     map.on('sourcedata', (e) => {
       if (e.sourceId === 'bandos' && e.isSourceLoaded) syncMarkersRef.current()

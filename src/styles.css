@@ -747,25 +747,65 @@ fieldset legend {
   font-family: inherit;
 }
 
-/* ============ Offline panel ============ */
-.offline-button {
-  position: relative;
+/* ============ Bottom tab bar: Downloads / Storage / Sync ============ */
+.sidebar-tabs {
+  display: flex;
+  flex-shrink: 0;
+  border-top: 1px solid #f0eef0;
 }
 
+.sidebar-tabs button {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 10px 4px calc(10px + env(safe-area-inset-bottom, 0px) / 2);
+  font-size: 12px;
+  font-weight: 500;
+  color: #555;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.sidebar-tabs button:hover {
+  background: #f4f4f5;
+}
+
+.sidebar-tabs button.active {
+  color: #e11d48;
+  background: #fdf2f4;
+}
+
+/* ============ Offline panel ============ */
+.update-button {
+  background: #e11d48;
+  color: #fff;
+}
+
+.update-button:hover {
+  background: #be123c;
+}
+
+/* Amber "you are offline" marker on the Downloads tab. */
 .offline-dot {
-  position: absolute;
-  top: -3px;
-  right: -3px;
   width: 9px;
   height: 9px;
   border-radius: 50%;
   background: #f59e0b;
   border: 2px solid #fff;
+  flex-shrink: 0;
 }
 
+/* Sits between the list and the bottom tab bar. */
 .offline-panel {
   flex-shrink: 0;
-  border-bottom: 1px solid #f0eef0;
+  border-top: 1px solid #f0eef0;
   padding: 12px;
   display: flex;
   flex-direction: column;

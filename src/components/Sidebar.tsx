@@ -4,12 +4,25 @@ import { useMarksStore } from '../state/marks'
 import { LayerSwitcher } from './LayerSwitcher'
 import { FilterButton, FilterPanel } from './FilterBar'
 import { OfflineButton, OfflinePanel } from './OfflinePanel'
+import { StorageButton, StoragePanel } from './StoragePanel'
+import { SyncButton, SyncPanel } from './SyncPanel'
 import { AddPlaceButton } from './AddPlace'
 import { PlacesList, useInViewBandos } from './PlacesList'
 import { DetailContent } from './DetailPanel'
 
 const PEEK_HEIGHT = 56
 const openHeight = () => Math.round(window.innerHeight * 0.62)
+
+/** Shown only while a new app version is waiting to be activated. */
+function UpdateButton() {
+  const updateApp = useAppStore((s) => s.updateApp)
+  if (!updateApp) return null
+  return (
+    <button className="filter-button update-button" onClick={updateApp} title="A new version is ready — tap to update">
+      Update ↻
+    </button>
+  )
+}
 
 /**
  * The one panel: controls on top, then either the in-view list or the
@@ -97,11 +110,18 @@ export function Sidebar() {
         <LayerSwitcher />
         <FilterButton />
         <AddPlaceButton />
-        <OfflineButton />
+        <UpdateButton />
       </div>
       <FilterPanel />
-      <OfflinePanel />
       <div className="sidebar-body">{selectedId != null ? <DetailContent /> : <PlacesList />}</div>
+      <OfflinePanel />
+      <StoragePanel />
+      <SyncPanel />
+      <nav className="sidebar-tabs" aria-label="Downloads, storage and sync">
+        <OfflineButton />
+        <StorageButton />
+        <SyncButton />
+      </nav>
     </aside>
   )
 }

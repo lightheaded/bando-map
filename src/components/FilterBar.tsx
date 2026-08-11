@@ -5,13 +5,17 @@ import { useFilteredBandos, activeFilterCount } from '../state/filters'
 import { USAGE_VALUES, CONDITION_VALUES, EN, type TriageStatus } from '../types'
 
 export function FilterButton() {
-  const open = useAppStore((s) => s.filtersOpen)
-  const setOpen = useAppStore((s) => s.setFiltersOpen)
+  const open = useAppStore((s) => s.panel === 'filters')
+  const togglePanel = useAppStore((s) => s.togglePanel)
   const filters = useAppStore((s) => s.filters)
   const count = useFilteredBandos().length
   const active = activeFilterCount(filters)
   return (
-    <button className={`filter-button ${open ? 'active' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open}>
+    <button
+      className={`filter-button ${open ? 'active' : ''}`}
+      onClick={() => togglePanel('filters')}
+      aria-expanded={open}
+    >
       Filters{active > 0 ? ` · ${active}` : ''} <span className="count">{count}</span>
     </button>
   )
@@ -58,7 +62,7 @@ const STATUS_LABELS: Record<TriageStatus, string> = { new: 'New', shortlisted: '
 const STATUS_DOTS: Record<TriageStatus, string> = { new: '#e11d48', shortlisted: '#2563eb', rejected: '#71717a' }
 
 export function FilterPanel() {
-  const open = useAppStore((s) => s.filtersOpen)
+  const open = useAppStore((s) => s.panel === 'filters')
   const filters = useAppStore((s) => s.filters)
   const setFilters = useAppStore((s) => s.setFilters)
   const resetFilters = useAppStore((s) => s.resetFilters)
