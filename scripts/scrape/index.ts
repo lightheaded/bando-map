@@ -13,7 +13,7 @@
  * Reruns are cheap: raw results, geocodes, monuments and thumbnails are all
  * cached on disk. Delete data/cache/ (and public/thumbs/) for a fresh run.
  */
-import { mkdir, writeFile, readFile, access } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, access, stat } from 'node:fs/promises'
 import { searchArchitecture, USAGE, CONDITION, type ArchitectureRow } from './muinas.ts'
 import { geocode, type GeocodeResult } from './geocode.ts'
 import { ensureThumb } from './thumbs.ts'
@@ -132,10 +132,20 @@ async function main() {
     bandos.push(bando)
   }
 
+  // Exact total thumbnail size — the app's "save all photos for offline"
+  // states its download size before the user commits.
+  let thumbsBytes = 0
+  for (const b of bandos) {
+    for (const t of b.thumbs ?? []) {
+      if (t) thumbsBytes += await stat(`public/${t}`).then((s) => s.size, () => 0)
+    }
+  }
+
   const dataset: BandoDataset = {
     version: 1,
     scrapedAt: new Date().toISOString(),
     source: 'https://register.muinas.ee/public.php?menuID=architecture (Muinsuskaitseamet, kultuurimälestiste register)',
+    thumbsBytes,
     bandos,
   }
   await mkdir('public/data', { recursive: true })
