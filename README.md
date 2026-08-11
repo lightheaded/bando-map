@@ -48,7 +48,8 @@ Everything is disk-cached under `data/cache/` (gitignored) — delete it for a f
 - **Custom places**: add your own spots (name + notes, no photos) straight onto the map; they live in localStorage and ride along in exports.
 - **Corrections**: the *Move* tool repositions a wrong pin (with undo), the *Edit* tool corrects register fields (name, address, era, usage, condition). Corrections are stored as their own keys in the export, and *Copy fixes* in the filter panel emits them as ready-to-paste `data/overrides.json` content, so they flow back into the shared dataset on the next scrape.
 - **Deep links**: selecting a spot puts `#b/<id>@<lat>,<lon>` in the URL — share it, and if the receiver doesn't have that spot, the map zooms to the coordinates instead.
-- **Offline (PWA)**: installable; everything browsed (app, dataset, photos, map tiles) is cached automatically and keeps working without signal. The ⇣ Offline panel is transparent about storage — real byte counts per category, clearable — and lets you save the current map view down to street level, or all spot photos, before heading somewhere remote. Maa-amet serves CORS-clean tiles, so cached sizes are honest (no opaque-response padding).
+- **Offline (PWA)**: installable; everything browsed (app, dataset, photos, map tiles) is cached automatically and keeps working without signal. The Offline panel is transparent about storage — real byte counts per category, clearable — and lets you save the current map view down to street level, or all spot photos, before heading somewhere remote. Maa-amet serves CORS-clean tiles, so cached sizes are honest (no opaque-response padding).
+- **Cross-device sync (optional)**: sign in from the Offline panel and your marks, notes, custom places and corrections follow you to every device. Merging is per-mark by `updatedAt` (the same logic as JSON import), so devices don't clobber each other. Signed-out use is unaffected — localStorage remains the source of truth.
 - `src/types.ts` is the single schema shared by the app and the scraper.
 
 ## Roadmap
@@ -60,6 +61,21 @@ Work is tracked on the [Bando Map project board](https://github.com/users/lighth
 - [x] **Phase 2 — User state**: triage workflow (shortlist / reject online, then visit, rate and take notes in the field), multi-select filters, note-aware search, JSON export/import, custom places, shareable deep links
 - [x] **Phase 3 — Polish & offline**: photo markers for unclustered spots, installable PWA with full offline support (app shell, dataset, photos, and saved map areas cached locally with a transparent storage panel)
 - [ ] **Phase 4 — Ideas**: accounts with SSO for cross-device sync, auto-graded attributes (remote vs urban), periodic scraping
+
+## Sync backend
+
+`infra/backend.tf` + `backend/handler.mjs`: Cognito user pool (Lite, hosted UI, email+password — Google federation can be added later) → API Gateway HTTP API with a JWT authorizer (unauthenticated requests never reach compute) → a single Lambda (arm64, Node 22, no build step) → DynamoDB on-demand, one document per user at `api.bando.lagle.xyz`. Deploys via `terraform -chdir=infra apply` (the handler zip is content-hashed). The SPA config (API URL, Cognito domain, client id — all public identifiers) lives in `src/sync/config.ts`.
+
+Everything scales to zero. Monthly cost at ~5 daily active users (~3k requests):
+
+| Component | Idle | 5 DAU | Notes |
+|---|---|---|---|
+| API Gateway (HTTP API) | $0 | ~$0.003 | $1.11/M requests |
+| Lambda (arm64, 256 MB) | $0 | $0 | inside the permanent free tier (1M req + 400k GB-s) |
+| DynamoDB (on-demand) | $0 | ~$0.07 | writes dominate (~25 KB doc = 25 WRU); storage ≪ 25 GB free |
+| Cognito (Lite) | $0 | $0 | free to 10,000 MAU |
+| CloudWatch logs (14 d) | $0 | <$0.01 | |
+| **Total** | **$0.00** | **≈ $0.08** | ~$1.60 even at 100 DAU |
 
 ## Deployment
 

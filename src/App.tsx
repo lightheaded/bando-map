@@ -1,14 +1,23 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { MapView } from './map/MapView'
 import { Sidebar } from './components/Sidebar'
 import { AddPlaceForm } from './components/AddPlace'
 import { useDeepLink } from './state/deeplink'
 import { useAppStore } from './state/store'
+import { initSync } from './sync/sync'
 import type { BandoDataset } from './types'
 
 export default function App() {
   const setDataset = useAppStore((s) => s.setDataset)
   useDeepLink()
+
+  // Finish a login redirect and start auto-sync (no-op until configured).
+  const syncStarted = useRef(false)
+  useEffect(() => {
+    if (syncStarted.current) return
+    syncStarted.current = true
+    initSync()
+  }, [])
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/bandos.json`)

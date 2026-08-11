@@ -870,6 +870,19 @@ fieldset legend {
   padding-top: 8px;
 }
 
+.offline-actions {
+  display: inline-flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sync-pitch {
+  display: block;
+  font-size: 13px;
+  color: #1c1a1b;
+  margin-bottom: 2px;
+}
+
 /* ============ Toast ============ */
 .toast {
   position: absolute;
