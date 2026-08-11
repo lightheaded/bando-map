@@ -31,6 +31,23 @@ function timeAgo(ms: number): string {
   return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`
 }
 
+const SYNCED_ITEMS = [
+  'Shortlist & rejections',
+  'Visits & dates',
+  'Ratings',
+  'Notes',
+  'Pin fixes & field edits',
+  'Your added places',
+]
+
+const SyncedItems = () => (
+  <ul className="sync-items">
+    {SYNCED_ITEMS.map((item) => (
+      <li key={item}>{item}</li>
+    ))}
+  </ul>
+)
+
 /** Cross-device sync: sign-in offer, or status + manual sync when signed in. */
 export function SyncPanel() {
   const open = useAppStore((s) => s.panel === 'sync')
@@ -67,17 +84,21 @@ export function SyncPanel() {
                 </button>
               </span>
             </div>
+            <SyncedItems />
           </>
         ) : (
-          <div className="offline-row">
-            <span className="offline-sub">
-              <strong className="sync-pitch">Sync across devices</strong>
-              Your shortlist, visits, notes and pin fixes on every device.
-            </span>
-            <button className="btn btn-small btn-primary" onClick={signIn} disabled={!online}>
-              Sign in
-            </button>
-          </div>
+          <>
+            <div className="offline-row">
+              <span className="offline-sub">
+                <strong className="sync-pitch">Sync across devices</strong>
+                Everything below follows you to every device:
+              </span>
+              <button className="btn btn-small btn-primary" onClick={signIn} disabled={!online}>
+                Sign in
+              </button>
+            </div>
+            <SyncedItems />
+          </>
         )}
       </div>
     </div>

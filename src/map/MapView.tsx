@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
-import type { FeatureCollection, Point } from 'geojson'
+import type { Feature, FeatureCollection, Point } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { mapStyle, applyBaseLayer } from './layers'
 import { useAppStore } from '../state/store'
@@ -55,7 +55,7 @@ function buildPhotoMarkerEl(b: Bando): HTMLDivElement {
     el.style.backgroundImage = `url(${PHOTO_URL(b.photos[0])})`
   } else {
     el.classList.add('no-photo')
-    el.textContent = b.custom ? '★' : '▢'
+    el.textContent = b.custom || b.community ? '★' : '▢'
   }
   el.addEventListener('click', (e) => {
     e.stopPropagation()
@@ -235,6 +235,29 @@ export function MapView() {
       // Unclustered spots are photo markers (HTML, see syncPhotoMarkers) —
       // only clusters render as circles.
 
+      // Admin review overlay: red = current position, green = proposed, a
+      // dashed line between them. Empty until setReviewDiff populates it.
+      map.addSource('review-diff', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({
+        id: 'review-diff-line',
+        type: 'line',
+        source: 'review-diff',
+        filter: ['==', ['geometry-type'], 'LineString'],
+        paint: { 'line-color': '#f59e0b', 'line-width': 2.5, 'line-dasharray': [2, 2] },
+      })
+      map.addLayer({
+        id: 'review-diff-points',
+        type: 'circle',
+        source: 'review-diff',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-color': ['match', ['get', 'role'], 'before', '#e11d48', '#059669'],
+          'circle-radius': 9,
+          'circle-stroke-width': 2.5,
+          'circle-stroke-color': '#fff',
+        },
+      })
+
       map.on('click', 'clusters', async (e) => {
         const state = useAppStore.getState()
         if (state.placeDraft || state.moveTarget != null) return
@@ -358,6 +381,48 @@ export function MapView() {
       },
     )
   }, [filters, sourceReady])
+
+  // Admin review: draw the pin-move diff and frame it.
+  const reviewDiff = useAppStore((s) => s.reviewDiff)
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !sourceReady) return
+    const source = map.getSource('review-diff') as maplibregl.GeoJSONSource | undefined
+    if (!source) return
+    const features: Feature[] = []
+    if (reviewDiff) {
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: reviewDiff.after },
+        properties: { role: 'after' },
+      })
+      if (reviewDiff.before) {
+        features.push(
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: reviewDiff.before },
+            properties: { role: 'before' },
+          },
+          {
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: [reviewDiff.before, reviewDiff.after] },
+            properties: {},
+          },
+        )
+      }
+      const points = [reviewDiff.after, ...(reviewDiff.before ? [reviewDiff.before] : [])]
+      const lons = points.map((p) => p[0])
+      const lats = points.map((p) => p[1])
+      map.fitBounds(
+        [
+          [Math.min(...lons), Math.min(...lats)],
+          [Math.max(...lons), Math.max(...lats)],
+        ],
+        { padding: panelPadding(), maxZoom: 16, duration: 500 },
+      )
+    }
+    source.setData({ type: 'FeatureCollection', features })
+  }, [reviewDiff, sourceReady])
 
   // Deep link to a location that isn't in the dataset.
   useEffect(() => {

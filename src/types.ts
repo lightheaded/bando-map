@@ -27,6 +27,8 @@ export interface Bando {
   pdf?: boolean
   /** True for user-added places (kept in localStorage, not in the dataset). */
   custom?: boolean
+  /** True for approved community places (from data/community.json). */
+  community?: boolean
   /**
    * Local thumbnail paths aligned with `photos` (null where the download
    * failed), relative to the app base, e.g. "thumbs/45.webp".
@@ -92,6 +94,53 @@ export interface UserData {
   version: 1
   marks: Record<number, UserMark>
   customPlaces?: CustomPlace[]
+}
+
+/**
+ * An overrides.json-shaped patch to one register record: corrected coordinates
+ * and/or field values. Also the `after` payload of a community submission.
+ */
+export interface CommunityOverride {
+  lat?: number
+  lon?: number
+  name?: string
+  address?: string
+  period?: string
+  usage?: string
+  condition?: string
+}
+
+/** One atomic proposed change to the shared map, reviewed by an admin. */
+export interface Submission {
+  id: string
+  email?: string
+  status: 'pending' | 'approved' | 'rejected'
+  createdAt: string
+  decidedAt?: string
+  /** Set on rejections — always shown to the contributor. */
+  reason?: string
+  data: SubmissionData
+}
+
+export interface SubmissionData {
+  /** 'edit' corrects a register record; 'place' proposes a new spot. */
+  type: 'edit' | 'place'
+  /** Register id for edits; the (negative) local place id for places. */
+  targetId: number
+  /** Display name for queues and history. */
+  name: string
+  /** Register values at submission time, for the reviewer's diff. */
+  before?: CommunityOverride
+  after: CommunityOverride
+  note?: string
+}
+
+/** data/community.json: approved contributions, applied on every client. */
+export interface CommunityData {
+  version: 1
+  publishedAt: string
+  overrides: Record<number, CommunityOverride>
+  places: { id: number; name: string; lat: number; lon: number }[]
 }
 
 export const USAGE_VALUES = ['ei kasutata', 'elumaja', 'kasutusel', 'koolimaja', 'sakraalhoone', 'tuletorn'] as const

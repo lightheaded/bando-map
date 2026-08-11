@@ -20,7 +20,10 @@ BUCKET="${BUCKET:-bando.lagle.xyz}"
 aws s3 sync public/thumbs "s3://$BUCKET/thumbs" \
   --cache-control "public,max-age=31536000,immutable"
 
+# community.json is owned by the sync Lambda (written on submission approval)
+# — never overwrite it with a stale local copy.
 aws s3 sync public/data "s3://$BUCKET/data" \
+  --exclude "community.json" \
   --cache-control "public,max-age=300,must-revalidate"
 
 DISTRIBUTION_ID="${DISTRIBUTION_ID:-$(aws cloudfront list-distributions \

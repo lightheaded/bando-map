@@ -40,6 +40,12 @@ The token needs the `project` scope (`gh auth refresh -s project,read:project`).
   are obtained is deliberately not documented here; credentials never live in the repo
   or CI. The SPA-side ids live in `src/sync/config.ts`. Keep it $0 idle:
   on-demand/per-request services only, no provisioned capacity.
+- **Cost projections are a living document.** The README "Cost" section holds per-component
+  projections plus a running month-by-month Projected/Actual table. Any change that touches
+  infra or usage patterns (new AWS resource, new API route, caching behavior, expected
+  traffic) must update the projections in the same commit. Actuals come from Cost Explorer
+  (`Project=bando-map`, split by `Component`) after a month closes — the user fills them in;
+  leave the Actual cell empty, never estimate it.
 - The dataset is built by `npm run scrape` and shipped with `npm run publish-data`
   (see README). Be polite to register.muinas.ee: keep the default delays, never run the
   pipeline while `npm run dev` is serving (writes into `public/` make Vite full-reload

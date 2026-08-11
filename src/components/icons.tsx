@@ -27,6 +27,20 @@ export const StorageIcon = () => (
   </svg>
 )
 
+export const EditIcon = () => (
+  <svg {...props}>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+  </svg>
+)
+
+export const ShieldIcon = () => (
+  <svg {...props}>
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    <path d="M9 12l2 2 4-4" />
+  </svg>
+)
+
 export const SyncIcon = () => (
   <svg {...props}>
     <path d="M23 4v6h-6" />

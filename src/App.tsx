@@ -5,7 +5,7 @@ import { AddPlaceForm } from './components/AddPlace'
 import { useDeepLink } from './state/deeplink'
 import { useAppStore } from './state/store'
 import { initSync } from './sync/sync'
-import type { BandoDataset } from './types'
+import type { BandoDataset, CommunityData } from './types'
 
 export default function App() {
   const setDataset = useAppStore((s) => s.setDataset)
@@ -27,6 +27,11 @@ export default function App() {
       })
       .then((d: BandoDataset) => setDataset(d))
       .catch((err) => console.error('Failed to load dataset:', err))
+    // Approved community contributions — absent until the first approval.
+    fetch(`${import.meta.env.BASE_URL}data/community.json`)
+      .then((r) => (r.ok ? r.json() : undefined))
+      .then((c: CommunityData | undefined) => c && useAppStore.getState().setCommunity(c))
+      .catch(() => {})
   }, [setDataset])
 
   return (

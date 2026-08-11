@@ -28,8 +28,9 @@ export const DEFAULT_FILTERS: FilterState = {
 export function matchesFilters(b: Bando, f: FilterState, mark: UserMark | undefined): boolean {
   const status: TriageStatus = mark?.status ?? 'new'
   if (!f.status.includes(status)) return false
-  // Custom places carry no register attributes — only status/visited/rating/search apply.
-  if (!b.custom) {
+  // Custom and community places carry no register attributes — only
+  // status/visited/rating/search apply.
+  if (!b.custom && !b.community) {
     if (f.usage.length && !f.usage.includes(b.usage ?? '')) return false
     if (f.condition.length && !f.condition.includes(b.condition ?? '')) return false
     if (f.county.length && !f.county.includes(b.county)) return false

@@ -54,7 +54,8 @@ Everything is disk-cached under `data/cache/` (gitignored) — delete it for a f
 - All user state lives in the browser's localStorage, exportable/importable as JSON. No backend, no accounts, no tracking.
 - **Workflow**: triage spots online — *Shortlist* the promising ones, *Reject* the duds (hidden by default, recoverable via filters) — then mark them *Visited* in the field and rate 1–5 stars with notes. Marker colors: red = new, blue = shortlisted, green = visited, gray = rejected.
 - **Custom places**: add your own spots (name + notes, no photos) straight onto the map; they live in localStorage and ride along in exports.
-- **Corrections**: the *Move* tool repositions a wrong pin (with undo), the *Edit* tool corrects register fields (name, address, era, usage, condition). Corrections are stored as their own keys in the export, and *Copy fixes* in the filter panel emits them as ready-to-paste `data/overrides.json` content, so they flow back into the shared dataset on the next scrape.
+- **Corrections**: the *Move* tool repositions a wrong pin (with undo), the *Edit* tool corrects register fields (name, address, era, usage, condition). Corrections are stored as their own keys in the export. (*Copy fixes* in the filter panel still emits them as `data/overrides.json` content — the manual escape hatch.)
+- **Community sourcing**: the *Contribute* tab collects your shareable changes — moved pins, field edits, added places (never personal state like shortlists or notes) — and submits each as its own reviewable item, with live status: pending with age, approved, or rejected *always with a reason*. Approving in the *Admin* tab (admin accounts only: review queue with old→new diffs drawn on the map, usage stats, registered users) republishes `data/community.json`, which every client merges over the dataset on load — corrections go live for everyone in seconds, no rescrape. The UX borrows deliberately: iD's unsaved-count badge, OSMCha's map-diff review, and one-item-per-submission + mandatory rejection reasons to avoid Google Maps' opaque-moderation trap.
 - **Deep links**: selecting a spot puts `#b/<id>@<lat>,<lon>` in the URL — share it, and if the receiver doesn't have that spot, the map zooms to the coordinates instead.
 - **Offline (PWA)**: installable; everything browsed (app, dataset, photos, map tiles) is cached automatically and keeps working without signal. The Offline panel is transparent about storage — real byte counts per category, clearable — and lets you save the current map view down to street level, or all spot photos, before heading somewhere remote. Maa-amet serves CORS-clean tiles, so cached sizes are honest (no opaque-response padding).
 - **Cross-device sync (optional)**: sign in from the Offline panel and your marks, notes, custom places and corrections follow you to every device. Merging is per-mark by `updatedAt` (the same logic as JSON import), so devices don't clobber each other. Signed-out use is unaffected — localStorage remains the source of truth.
@@ -72,18 +73,41 @@ Work is tracked on the [Bando Map project board](https://github.com/users/lighth
 
 ## Sync backend
 
-`infra/backend.tf` + `backend/handler.mjs`: Cognito user pool (Lite, hosted UI, email+password — Google federation can be added later) → API Gateway HTTP API with a JWT authorizer (unauthenticated requests never reach compute) → a single Lambda (arm64, Node 22, no build step) → DynamoDB on-demand, one document per user at `api.bando.lagle.xyz`. Deploys via `terraform -chdir=infra apply` (the handler zip is content-hashed). The SPA config (API URL, Cognito domain, client id — all public identifiers) lives in `src/sync/config.ts`.
+`infra/backend.tf` + `backend/handler.mjs`: Cognito user pool (Lite, hosted UI, email+password — Google federation can be added later) → API Gateway HTTP API with a JWT authorizer (unauthenticated requests never reach compute) → a single Lambda (arm64, Node 22, no build step) → DynamoDB on-demand at `api.bando.lagle.xyz`. One sync document per user, plus community submissions in the same table (`pk=sub#<uuid>`; listing scans — at this scale that beats a GSI). Routes: `GET|PUT /sync`, `GET|POST /submissions`, and `GET /admin/overview` + `POST /admin/submissions/{id}` gated by the `ADMIN_EMAILS` allowlist (terraform `admin_emails`, mirrored for UI-visibility only in `src/sync/config.ts`). Approvals rebuild `data/community.json` from all approved submissions and publish it to the site bucket + invalidate CloudFront. Deploys via `terraform -chdir=infra apply` (the handler zip is content-hashed). The SPA config (API URL, Cognito domain, client id — all public identifiers) lives in `src/sync/config.ts`.
 
-Everything scales to zero. Monthly cost at ~5 daily active users (~3k requests):
+Everything scales to zero — cost details live in the [Cost](#cost) section below.
+
+## Cost
+
+Every resource is tagged (`Project=bando-map`, `Component=site|sync` — see `infra/main.tf`), so
+Cost Explorer can split hosting from the backend once the cost-allocation tags are activated.
+**Both tables below are living documents** (see AGENTS.md): any infra or usage-pattern change
+updates the projections; the Actual column is filled from Cost Explorer after each month closes.
+
+Projected monthly cost per component, at idle and at ~5 daily active users (~3k API requests):
 
 | Component | Idle | 5 DAU | Notes |
 |---|---|---|---|
-| API Gateway (HTTP API) | $0 | ~$0.003 | $1.11/M requests |
+| API Gateway (HTTP API) | $0 | ~$0.004 | $1.11/M requests — sync, submissions and admin calls |
 | Lambda (arm64, 256 MB) | $0 | $0 | inside the permanent free tier (1M req + 400k GB-s) |
-| DynamoDB (on-demand) | $0 | ~$0.07 | writes dominate (~25 KB doc = 25 WRU); storage ≪ 25 GB free |
-| Cognito (Lite) | $0 | $0 | free to 10,000 MAU |
-| CloudWatch logs (14 d) | $0 | <$0.01 | |
-| **Total** | **$0.00** | **≈ $0.08** | ~$1.60 even at 100 DAU |
+| DynamoDB (on-demand) | $0 | ~$0.07 | sync writes dominate (~25 KB doc = 25 WRU); submission items and admin scans are noise; storage ≪ 25 GB free |
+| Cognito (Lite) | $0 | $0 | free to 10,000 MAU; ListUsers API calls are free |
+| S3 (site + data + pdfs, ~1 GB) | ~$0.02 | ~$0.02 | storage; deploy PUTs and community.json publishes are fractions of a cent |
+| CloudFront | $0 | $0 | permanent free tier: 1 TB egress + 10M requests/month |
+| CloudFront invalidations | $0 | $0 | 1,000 free paths/month; one per deploy + one per submission approval |
+| CloudWatch logs (14 d retention) | $0 | <$0.01 | |
+| **Total** | **≈ $0.02** | **≈ $0.10** | ~$1.70 even at 100 DAU |
+
+Excluded: the Route53 hosted zone ($0.50/mo) — `lagle.xyz` is a pre-existing personal zone shared
+with other projects.
+
+Running record — add a row when a month starts, fill Actual from Cost Explorer
+(filter `Project=bando-map`) after it closes, never rewrite past rows:
+
+| Month | Projected | Actual | Notes |
+|---|---|---|---|
+| 2026-08 | ~$0.03 | | sync launched + community review shipped mid-month; a few users at most |
+| 2026-09 | ~$0.10 | | first full month with accounts + submissions, assuming ~5 DAU |
 
 ## Deployment
 

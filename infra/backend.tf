@@ -9,6 +9,14 @@ variable "api_domain" {
   default = "api.bando.lagle.xyz"
 }
 
+# Emails allowed on the /admin/* routes (community-submission review). The
+# frontend mirrors this list in src/sync/config.ts, but only for showing the
+# Admin tab — this is the list that's enforced.
+variable "admin_emails" {
+  type    = list(string)
+  default = ["admin@example.invalid"]
+}
+
 # ----- Data -----
 
 resource "aws_dynamodb_table" "sync" {
@@ -51,13 +59,30 @@ resource "aws_iam_role_policy" "sync_lambda" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["dynamodb:GetItem", "dynamodb:PutItem"]
+        Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Scan"]
         Resource = aws_dynamodb_table.sync.arn
       },
       {
         Effect   = "Allow"
         Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "${aws_cloudwatch_log_group.sync_lambda.arn}:*"
+      },
+      # Approving a submission publishes data/community.json to the site.
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = "${aws_s3_bucket.site.arn}/data/community.json"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["cloudfront:CreateInvalidation"]
+        Resource = aws_cloudfront_distribution.site.arn
+      },
+      # Admin overview: registered-user list and counts.
+      {
+        Effect   = "Allow"
+        Action   = ["cognito-idp:ListUsers"]
+        Resource = aws_cognito_user_pool.users.arn
       }
     ]
   })
@@ -82,7 +107,13 @@ resource "aws_lambda_function" "sync" {
   tags             = { Component = "sync" }
 
   environment {
-    variables = { TABLE_NAME = aws_dynamodb_table.sync.name }
+    variables = {
+      TABLE_NAME      = aws_dynamodb_table.sync.name
+      ADMIN_EMAILS    = join(",", var.admin_emails)
+      SITE_BUCKET     = aws_s3_bucket.site.bucket
+      DISTRIBUTION_ID = aws_cloudfront_distribution.site.id
+      USER_POOL_ID    = aws_cognito_user_pool.users.id
+    }
   }
 
   depends_on = [aws_cloudwatch_log_group.sync_lambda]
@@ -157,7 +188,7 @@ resource "aws_apigatewayv2_api" "sync" {
 
   cors_configuration {
     allow_origins = ["https://bando.lagle.xyz", "http://localhost:5173"]
-    allow_methods = ["GET", "PUT", "OPTIONS"]
+    allow_methods = ["GET", "PUT", "POST", "OPTIONS"]
     allow_headers = ["authorization", "content-type"]
     max_age       = 3600
   }
@@ -193,6 +224,22 @@ resource "aws_apigatewayv2_route" "sync_get" {
 resource "aws_apigatewayv2_route" "sync_put" {
   api_id             = aws_apigatewayv2_api.sync.id
   route_key          = "PUT /sync"
+  target             = "integrations/${aws_apigatewayv2_integration.sync.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+}
+
+# Community submissions + admin review — same Lambda, same JWT authorizer
+# (the handler enforces ADMIN_EMAILS on the /admin/* routes).
+resource "aws_apigatewayv2_route" "community" {
+  for_each = toset([
+    "GET /submissions",
+    "POST /submissions",
+    "GET /admin/overview",
+    "POST /admin/submissions/{id}",
+  ])
+  api_id             = aws_apigatewayv2_api.sync.id
+  route_key          = each.value
   target             = "integrations/${aws_apigatewayv2_integration.sync.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito.id

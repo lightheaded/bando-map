@@ -6,7 +6,8 @@ import { FilterButton, FilterPanel } from './FilterBar'
 import { OfflineButton, OfflinePanel } from './OfflinePanel'
 import { StorageButton, StoragePanel } from './StoragePanel'
 import { SyncButton, SyncPanel } from './SyncPanel'
-import { AddPlaceButton } from './AddPlace'
+import { ContributeButton, ContributePanel } from './ContributePanel'
+import { AdminButton, AdminPanel } from './AdminPanel'
 import { PlacesList, useInViewBandos } from './PlacesList'
 import { DetailContent } from './DetailPanel'
 
@@ -109,18 +110,21 @@ export function Sidebar() {
       <div className="sidebar-controls">
         <LayerSwitcher />
         <FilterButton />
-        <AddPlaceButton />
         <UpdateButton />
       </div>
       <FilterPanel />
       <div className="sidebar-body">{selectedId != null ? <DetailContent /> : <PlacesList />}</div>
+      <ContributePanel />
       <OfflinePanel />
       <StoragePanel />
       <SyncPanel />
-      <nav className="sidebar-tabs" aria-label="Downloads, storage and sync">
+      <AdminPanel />
+      <nav className="sidebar-tabs" aria-label="Contribute, downloads, storage and sync">
+        <ContributeButton />
         <OfflineButton />
         <StorageButton />
         <SyncButton />
+        <AdminButton />
       </nav>
     </aside>
   )
