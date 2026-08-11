@@ -25,6 +25,8 @@ interface AppState {
   sheetOpen: boolean
   /** The Offline panel (storage, save-for-offline) is open. */
   offlineOpen: boolean
+  /** Cross-device sync status (email set = signed in). */
+  sync: { email?: string; state: 'idle' | 'syncing' | 'error'; lastAt?: number }
   setDataset: (d: BandoDataset) => void
   select: (id?: number) => void
   setBaseLayer: (l: BaseLayerId) => void
@@ -66,6 +68,7 @@ export const useAppStore = create<AppState>((set) => ({
   setFiltersOpen: (open) => set((s) => ({ filtersOpen: open, offlineOpen: open ? false : s.offlineOpen })),
   offlineOpen: false,
   setOfflineOpen: (open) => set((s) => ({ offlineOpen: open, filtersOpen: open ? false : s.filtersOpen })),
+  sync: { state: 'idle' },
   setPlaceDraft: (draft) => set({ placeDraft: draft }),
   setMoveTarget: (id) => set({ moveTarget: id }),
   setPendingView: (view) => set({ pendingView: view }),
