@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Bando, BandoDataset, CommunityData } from '../types'
+import type { Bando, BandoDataset, CommunityData, HintLayerDataset, HintSourceId } from '../types'
 import type { BaseLayerId } from '../map/layers'
 import { useMarksStore } from './marks'
 import { DEFAULT_FILTERS, type FilterState } from './filters'
@@ -81,8 +81,14 @@ interface AppState {
   sheetOpen: boolean
   /** Desktop: sidebar slid away so the map has the full viewport. */
   sidebarCollapsed: boolean
-  /** Cross-device sync status (email set = signed in). */
-  sync: { email?: string; state: 'idle' | 'syncing' | 'error'; lastAt?: number }
+  /** Cross-device sync status (email set = signed in; admin = Cognito group). */
+  sync: { email?: string; admin?: boolean; state: 'idle' | 'syncing' | 'error'; lastAt?: number }
+  /** Hint-layer datasets, fetched lazily the first time a layer is enabled. */
+  hintData: Partial<Record<HintSourceId, HintLayerDataset>>
+  loadHint: (id: HintSourceId) => void
+  /** One-shot deep-link target for a hint spot (#h/<src>/<id>@lat,lon). */
+  pendingHint?: { src: HintSourceId; id: string; lat: number; lon: number }
+  setPendingHint: (hint?: { src: HintSourceId; id: string; lat: number; lon: number }) => void
   /** Set when a new app version has activated in the background — call it to reload into it. */
   updateApp?: () => void
   setDataset: (d: BandoDataset) => void
@@ -104,6 +110,36 @@ interface AppState {
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined
+/** In-flight hint fetches, so a toggle spam doesn't stack requests. */
+const hintLoading = new Set<HintSourceId>()
+
+const FILTERS_KEY = 'bando-map:filters'
+
+/** Saved filters merged over the defaults — unknown/removed keys drop out. */
+function loadSavedFilters(): FilterState {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FILTERS_KEY) ?? '') as Partial<FilterState> & {
+      /** Legacy schema: visited was a separate segmented control, not a status. */
+      visited?: 'all' | 'visited' | 'unvisited'
+    }
+    // Migrate the legacy visited control into the status list it merged into.
+    if (saved.visited && Array.isArray(saved.status) && !saved.status.includes('visited')) {
+      saved.status = saved.visited === 'visited' ? ['visited'] : saved.visited === 'all' ? [...saved.status, 'visited'] : saved.status
+    }
+    const out = { ...DEFAULT_FILTERS }
+    for (const key of Object.keys(DEFAULT_FILTERS) as (keyof FilterState)[]) {
+      const value = saved[key]
+      if (value !== undefined && typeof value === typeof DEFAULT_FILTERS[key]) {
+        ;(out as Record<string, unknown>)[key] = value
+      }
+    }
+    return out
+  } catch {
+    return DEFAULT_FILTERS
+  }
+}
+
+const saveFilters = (f: FilterState) => localStorage.setItem(FILTERS_KEY, JSON.stringify(f))
 
 export const useAppStore = create<AppState>((set) => ({
   bandos: [],
@@ -129,11 +165,30 @@ export const useAppStore = create<AppState>((set) => ({
     toastTimer = setTimeout(() => set({ toast: undefined }), action ? 6000 : 3500)
     set({ toast: { msg, action } })
   },
-  filters: DEFAULT_FILTERS,
-  setFilters: (patch) => set((s) => ({ filters: { ...s.filters, ...patch } })),
-  resetFilters: () => set({ filters: DEFAULT_FILTERS }),
+  filters: loadSavedFilters(),
+  setFilters: (patch) =>
+    set((s) => {
+      const filters = { ...s.filters, ...patch }
+      saveFilters(filters)
+      return { filters }
+    }),
+  resetFilters: () => {
+    saveFilters(DEFAULT_FILTERS)
+    set({ filters: DEFAULT_FILTERS })
+  },
   togglePanel: (panel) => set((s) => ({ panel: s.panel === panel ? undefined : panel })),
   sync: { state: 'idle' },
+  hintData: {},
+  loadHint: (id) => {
+    if (useAppStore.getState().hintData[id] || hintLoading.has(id)) return
+    hintLoading.add(id)
+    fetch(`${import.meta.env.BASE_URL}data/layers/${id}.json`)
+      .then((res) => (res.ok ? (res.json() as Promise<HintLayerDataset>) : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((d) => set((s) => ({ hintData: { ...s.hintData, [id]: d } })))
+      .catch(() => useAppStore.getState().showToast('Hint layer unavailable — are you offline?'))
+      .finally(() => hintLoading.delete(id))
+  },
+  setPendingHint: (pendingHint) => set({ pendingHint }),
   setPlaceDraft: (draft) => set({ placeDraft: draft }),
   setMoveTarget: (id) => set({ moveTarget: id }),
   setReviewDiff: (reviewDiff) => set({ reviewDiff }),

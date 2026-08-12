@@ -2,7 +2,9 @@ import { useMemo, useRef } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore, downloadUserData } from '../state/marks'
 import { useFilteredBandos, activeFilterCount } from '../state/filters'
-import { USAGE_VALUES, CONDITION_VALUES, EN, type TriageStatus } from '../types'
+import { USAGE_VALUES, CONDITION_VALUES, EN, HINT_SOURCES, type HintSourceId } from '../types'
+import { HINT_STYLE } from '../map/hints'
+import type { StatusFilter } from '../state/filters'
 
 export function FilterButton() {
   const open = useAppStore((s) => s.panel === 'filters')
@@ -58,8 +60,19 @@ function CopyFixesButton() {
   )
 }
 
-const STATUS_LABELS: Record<TriageStatus, string> = { new: 'New', shortlisted: 'Shortlisted', rejected: 'Rejected' }
-const STATUS_DOTS: Record<TriageStatus, string> = { new: '#e11d48', shortlisted: '#2563eb', rejected: '#71717a' }
+// Same colors and precedence as the map markers (see statusColor in MapView).
+const STATUS_LABELS: Record<StatusFilter, string> = {
+  new: 'New',
+  shortlisted: 'Shortlisted',
+  visited: 'Visited',
+  rejected: 'Rejected',
+}
+const STATUS_DOTS: Record<StatusFilter, string> = {
+  new: '#e11d48',
+  shortlisted: '#2563eb',
+  visited: '#059669',
+  rejected: '#71717a',
+}
 
 export function FilterPanel() {
   const open = useAppStore((s) => s.panel === 'filters')
@@ -95,7 +108,7 @@ export function FilterPanel() {
       <fieldset>
         <legend>Status</legend>
         <div className="checks">
-          {(Object.keys(STATUS_LABELS) as TriageStatus[]).map((s) => (
+          {(Object.keys(STATUS_LABELS) as StatusFilter[]).map((s) => (
             <label key={s} className="checkbox">
               <input
                 type="checkbox"
@@ -108,19 +121,6 @@ export function FilterPanel() {
           ))}
         </div>
       </fieldset>
-      <div className="segmented" role="radiogroup" aria-label="Visited">
-        {(['all', 'unvisited', 'visited'] as const).map((v) => (
-          <button
-            key={v}
-            role="radio"
-            aria-checked={filters.visited === v}
-            className={filters.visited === v ? 'active' : ''}
-            onClick={() => setFilters({ visited: v })}
-          >
-            {v === 'all' ? 'All' : v === 'visited' ? 'Visited' : 'Unvisited'}
-          </button>
-        ))}
-      </div>
       <fieldset>
         <legend>Usage</legend>
         <div className="checks">
@@ -166,6 +166,51 @@ export function FilterPanel() {
           ))}
         </div>
       </fieldset>
+      <fieldset>
+        <legend>Hint layers</legend>
+        <div className="checks">
+          {HINT_SOURCES.map((h: HintSourceId) => (
+            <span key={h} style={{ display: 'contents' }}>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={filters.hints.includes(h)}
+                  onChange={() => setFilters({ hints: toggle(filters.hints, h) })}
+                />
+                <span className="dot" style={{ background: HINT_STYLE[h].color }} />
+                {HINT_STYLE[h].label}
+              </label>
+              {h === 'etak' && filters.hints.includes('etak') && (
+                <div className="hint-sub">
+                  <label>
+                    min footprint
+                    <input
+                      type="number"
+                      min={0}
+                      step={25}
+                      value={filters.etakMinM2}
+                      onChange={(e) => setFilters({ etakMinM2: Math.max(0, Number(e.target.value) || 0) })}
+                    />
+                    m²
+                  </label>
+                  <label>
+                    min dwelling distance
+                    <input
+                      type="number"
+                      min={0}
+                      step={25}
+                      value={filters.etakMinDwell}
+                      onChange={(e) => setFilters({ etakMinDwell: Math.max(0, Number(e.target.value) || 0) })}
+                    />
+                    m
+                  </label>
+                  <span className="hint-sub-note">0 = off</span>
+                </div>
+              )}
+            </span>
+          ))}
+        </div>
+      </fieldset>
       <label className="stars-filter">
         Min rating
         <span className="stars" role="radiogroup" aria-label="Minimum rating">
@@ -205,12 +250,6 @@ export function FilterPanel() {
           }}
         />
       </div>
-      <p className="legend-line">
-        <span className="dot" style={{ background: '#e11d48' }} /> new
-        <span className="dot" style={{ background: '#2563eb' }} /> shortlisted
-        <span className="dot" style={{ background: '#059669' }} /> visited
-        <span className="dot" style={{ background: '#71717a' }} /> rejected
-      </p>
     </div>
   )
 }

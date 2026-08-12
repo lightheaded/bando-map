@@ -45,6 +45,53 @@ export interface BandoDataset {
   bandos: Bando[]
 }
 
+/** The supplementary hint-layer sources (public/data/layers/<id>.json). */
+export const HINT_SOURCES = ['etak', 'osm', 'esap', 'teadaanded'] as const
+export type HintSourceId = (typeof HINT_SOURCES)[number]
+
+/**
+ * A point from a supplementary hint source — leads for searches and manual
+ * triage, deliberately much thinner than a Bando (no user marks, and any
+ * photos stay hot-linked from the source rather than archived here).
+ */
+export interface HintSpot {
+  /** Stable id within the source (etak_id, "way/123", ESAP object slug, AT teate_number). */
+  id: string
+  name?: string
+  lat: number
+  lon: number
+  address?: string
+  /** Building footprint in m² (ETAK). */
+  m2?: number
+  /** Distance to the nearest in-use dwelling in meters, capped at 999 (ETAK). */
+  dwellM?: number
+  /** Source record date (e.g. an Ametlikud Teadaanded publication date), ISO yyyy-mm-dd. */
+  date?: string
+  /**
+   * Who to contact about the building before going (e.g. the municipality
+   * office that declared it ownerless), shown verbatim in the detail popup.
+   */
+  contact?: string[]
+  /** URL of the original source record, when the source has per-record pages. */
+  sourceUrl?: string
+  /**
+   * Source-native photo tokens, resolved to thumbnail URLs per source (see
+   * ESAP_THUMB_URL) — the tokens ride in the dataset, the images stay on the
+   * source's own server.
+   */
+  photos?: string[]
+  /** Ehitisregister building code, for a direct link to the official record. */
+  ehr?: string
+}
+
+export interface HintLayerDataset {
+  version: 1
+  scrapedAt: string
+  /** Human-readable provenance + license line, shown in the layer's popup footer. */
+  source: string
+  spots: HintSpot[]
+}
+
 /**
  * Per-bando user state, localStorage-only for now. Versioned for a future backend.
  *
@@ -192,6 +239,14 @@ export const MUINAS_DETAIL_URL = (id: number) =>
 
 export const PHOTO_URL = (photoId: number) =>
   `https://register.muinas.ee/content/architecture/regular/${photoId}.jpg`
+
+/**
+ * ESAP gallery thumbnail. The object slug is the hint spot's id ("jg-0730") and
+ * `photo` is the stored token — the filename after the slug, extension included,
+ * because a few of the gallery images are .png rather than .jpg.
+ */
+export const ESAP_THUMB_URL = (slug: string, photo: string) =>
+  `https://db.esap.ee/uploads/images/thumb/${slug.toUpperCase()}_${photo}`
 
 export const GMAPS_URL = (lat: number, lon: number) => `https://www.google.com/maps?q=${lat},${lon}`
 

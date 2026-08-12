@@ -1,7 +1,7 @@
 {
   "name": "bando-map",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.13.0",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "scrape": "tsx scripts/scrape/index.ts",
+    "scrape-hints": "tsx scripts/scrape/hints.ts",
     "publish-data": "scripts/publish-data.sh"
   },
   "dependencies": {

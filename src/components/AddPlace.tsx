@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
+import { revealPlace } from '../state/filters'
 
 // The add flow starts from the Contribute panel ("+ Add a place").
 export function AddPlaceForm() {
@@ -34,7 +35,7 @@ export function AddPlaceForm() {
     if (notes.trim()) setMark(id, { comment: notes.trim() })
     setPlaceDraft(undefined)
     select(id)
-    showToast('Place added')
+    showToast(revealPlace(id) ? 'Place added — filters widened to show it' : 'Place added')
   }
 
   return (

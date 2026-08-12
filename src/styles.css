@@ -1370,3 +1370,76 @@ details.offline-card summary {
     top: 16px;
   }
 }
+
+/* Hint layers (supplementary sources): sub-filters + point popups. */
+.hint-sub {
+  /* Full flex row of its own, directly under the ETAK toggle. */
+  flex-basis: 100%;
+  margin: 0 0 2px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 12px;
+  color: #444;
+}
+/* Beat .filter-panel label's column layout — these are inline "text [input] unit" rows. */
+.filter-panel .hint-sub label {
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.hint-sub input[type='number'] {
+  width: 64px;
+  padding: 1px 4px;
+  font-size: 12px;
+}
+.hint-sub-note {
+  font-size: 11px;
+  color: #888;
+}
+.hint-popup .hint-add {
+  margin-top: 7px;
+}
+.hint-popup {
+  font-size: 13px;
+  line-height: 1.45;
+}
+.hint-popup .hint-photos {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  /* Don't hand a finished sideways scroll on to the map behind the popup. */
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  margin-top: 6px;
+  padding-bottom: 2px;
+}
+.hint-popup .hint-photos a {
+  flex: 0 0 auto;
+}
+.hint-popup .hint-photos img {
+  height: 64px;
+  width: auto;
+  /* Reserve a landscape thumb's width before it loads, so the strip's overflow
+     (and the wheel handler that depends on it) is right from the first frame.
+     Loaded thumbs are wider than this, so nothing gets stretched. */
+  min-width: 90px;
+  border-radius: 3px;
+  background: #e5e7eb;
+  display: block;
+}
+.hint-popup .hint-links {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid #e5e7eb;
+}
+.hint-popup .hint-links a {
+  white-space: nowrap;
+}
+.hint-popup .hint-source {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #6b7280;
+}
