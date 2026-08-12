@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { Bando, BandoDataset, CommunityData, HintLayerDataset, HintSourceId } from '../types'
+import type { Bando, BandoDataset, CommunityData, HintLayerDataset, HintSourceId, UasZoneDataset } from '../types'
+import { SYNC } from '../sync/config'
 import type { BaseLayerId } from '../map/layers'
 import { useMarksStore } from './marks'
 import { DEFAULT_FILTERS, type FilterState } from './filters'
@@ -91,6 +92,15 @@ interface AppState {
   /** One-shot deep-link target for a hint spot (#h/<src>/<id>@lat,lon). */
   pendingHint?: { src: HintSourceId; id: string; lat: number; lon: number }
   setPendingHint: (hint?: { src: HintSourceId; id: string; lat: number; lon: number }) => void
+  /** UAS airspace zones, fetched lazily the first time the layer is enabled. */
+  zoneData?: UasZoneDataset
+  zoneState: 'idle' | 'loading' | 'refreshing'
+  loadZones: () => void
+  /** Ask the backend to re-poll the official source. Throttled server-side. */
+  refreshZones: () => void
+  /** Layers menu, anchored under its button on the map. */
+  layersPopover: boolean
+  setLayersPopover: (open: boolean) => void
   /** Set when a new app version has activated in the background — call it to reload into it. */
   updateApp?: () => void
   setDataset: (d: BandoDataset) => void
@@ -203,6 +213,59 @@ export const useAppStore = create<AppState>((set) => ({
       .finally(() => hintLoading.delete(id))
   },
   setPendingHint: (pendingHint) => set({ pendingHint }),
+  zoneState: 'idle',
+  layersPopover: false,
+  setLayersPopover: (layersPopover) => set({ layersPopover }),
+  loadZones: () => {
+    const s = useAppStore.getState()
+    if (s.zoneData || s.zoneState !== 'idle') return
+    set({ zoneState: 'loading' })
+    fetch(`${import.meta.env.BASE_URL}data/zones.json`)
+      .then((res) => (res.ok ? (res.json() as Promise<UasZoneDataset>) : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((zoneData) => set({ zoneData }))
+      .catch(() => useAppStore.getState().showToast('Airspace zones unavailable — are you offline?'))
+      .finally(() => set({ zoneState: 'idle' }))
+  },
+  refreshZones: () => {
+    if (useAppStore.getState().zoneState !== 'idle') return
+    set({ zoneState: 'refreshing' })
+    fetch(`${SYNC.apiUrl}/zones/refresh`, { method: 'POST' })
+      .then(async (res) => {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string
+          changed?: boolean
+          checkedAt?: string
+          fetchedAt?: string
+        }
+        if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
+        // Nothing moved: adopt the backend's own timestamps rather than
+        // re-downloading a file we already have byte for byte.
+        if (!body.changed) {
+          set((s) =>
+            s.zoneData ? { zoneData: { ...s.zoneData, checkedAt: body.checkedAt ?? s.zoneData.checkedAt } } : {},
+          )
+          useAppStore.getState().showToast('Airspace zones are already current')
+          return
+        }
+        // The zones moved. The CDN invalidation the backend just issued takes a
+        // few seconds to reach every edge, so a re-fetch can still land on the
+        // previous copy — the timestamps below come from the backend either way,
+        // and the polygons catch up on the next load if this one raced.
+        const res2 = await fetch(`${import.meta.env.BASE_URL}data/zones.json`, { cache: 'reload' })
+        if (res2.ok) set({ zoneData: (await res2.json()) as UasZoneDataset })
+        useAppStore.getState().showToast('Airspace zones updated')
+      })
+      .catch((err: Error) =>
+        useAppStore.getState().showToast(
+          // A throw with no response at all is the network (or being offline),
+          // not something the backend said — don't surface "Failed to fetch".
+          err instanceof TypeError
+            ? 'Could not reach the refresh service — the scheduled copy is still shown'
+            : err.message,
+        ),
+      )
+      .finally(() => set({ zoneState: 'idle' }))
+  },
   setPlaceDraft: (draft) => set({ placeDraft: draft }),
   setMoveTarget: (id) => set({ moveTarget: id }),
   setReviewDiff: (reviewDiff) => set({ reviewDiff }),

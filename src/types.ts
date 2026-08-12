@@ -93,6 +93,64 @@ export interface HintLayerDataset {
 }
 
 /**
+ * One UAS geographical zone — a piece of airspace with rules for unmanned
+ * flight, as published by EANS behind https://utm.eans.ee/avm/. Written by the
+ * zones Lambda (backend/zones.mjs), which passes the source's own fields
+ * through without judging them; what counts as restrictive is decided in
+ * src/map/zones.ts so the rule lives in one place.
+ */
+export interface UasZoneProps {
+  /** Source identifier, e.g. "EEGZ24S". Unique per zone. */
+  id: string
+  /** Short published name, e.g. "EEGZ24" or a NOTAM reference like "A2037/26". */
+  name: string
+  /**
+   * The source's own classification. Do NOT read this alone: most temporary
+   * entries — activated danger areas, nesting-season nature zones — are filed
+   * as NO_RESTRICTION and carry the real constraint in `message`.
+   */
+  restriction: 'NO_RESTRICTION' | 'REQ_AUTHORISATION' | 'PROHIBITED'
+  /** Why the zone exists: "Air traffic", "Nature", "Sensitive", "Other", … */
+  reason: string
+  /** Vertical band in metres, with the datum each limit is measured from. */
+  lower: number
+  upper: number
+  lowerRef: string
+  upperRef: string
+  /** False for time-limited entries, which then carry `start`/`end`. */
+  permanent: boolean
+  start?: string
+  end?: string
+  /** The published rule text — the authoritative bit for a temporary zone. */
+  message?: string
+  /** Estonian version of the same message. */
+  messageEt?: string
+  /** Extra free-text conditions; absent on most zones. */
+  conditions?: string
+}
+
+/**
+ * data/zones.json — a GeoJSON FeatureCollection with provenance keys alongside,
+ * so it can go straight to MapLibre while the app still reads its age.
+ * MapLibre ignores the extra top-level keys.
+ */
+export interface UasZoneDataset {
+  type: 'FeatureCollection'
+  version: 1
+  /** When the zones last actually changed. */
+  fetchedAt: string
+  /** When the fetcher last confirmed them against the source. */
+  checkedAt: string
+  source: string
+  attribution: string
+  features: {
+    type: 'Feature'
+    geometry: { type: 'Polygon'; coordinates: [number, number][][] }
+    properties: UasZoneProps
+  }[]
+}
+
+/**
  * Per-bando user state, localStorage-only for now. Versioned for a future backend.
  *
  * Two independent axes: `status` is the online-triage verdict (undefined = new,

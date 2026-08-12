@@ -2,8 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore, downloadUserData } from '../state/marks'
 import { useFilteredBandos, activeFilterCount } from '../state/filters'
-import { USAGE_VALUES, CONDITION_VALUES, EN, HINT_SOURCES, type HintSourceId } from '../types'
-import { HINT_STYLE } from '../map/hints'
+import { USAGE_VALUES, CONDITION_VALUES, EN } from '../types'
 import type { StatusFilter } from '../state/filters'
 
 export function FilterButton() {
@@ -163,51 +162,6 @@ export function FilterPanel() {
               />
               {c.replace(' maakond', '')}
             </label>
-          ))}
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend>Hint layers</legend>
-        <div className="checks">
-          {HINT_SOURCES.map((h: HintSourceId) => (
-            <span key={h} style={{ display: 'contents' }}>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={filters.hints.includes(h)}
-                  onChange={() => setFilters({ hints: toggle(filters.hints, h) })}
-                />
-                <span className="dot" style={{ background: HINT_STYLE[h].color }} />
-                {HINT_STYLE[h].label}
-              </label>
-              {h === 'etak' && filters.hints.includes('etak') && (
-                <div className="hint-sub">
-                  <label>
-                    min footprint
-                    <input
-                      type="number"
-                      min={0}
-                      step={25}
-                      value={filters.etakMinM2}
-                      onChange={(e) => setFilters({ etakMinM2: Math.max(0, Number(e.target.value) || 0) })}
-                    />
-                    m²
-                  </label>
-                  <label>
-                    min dwelling distance
-                    <input
-                      type="number"
-                      min={0}
-                      step={25}
-                      value={filters.etakMinDwell}
-                      onChange={(e) => setFilters({ etakMinDwell: Math.max(0, Number(e.target.value) || 0) })}
-                    />
-                    m
-                  </label>
-                  <span className="hint-sub-note">0 = off</span>
-                </div>
-              )}
-            </span>
           ))}
         </div>
       </fieldset>

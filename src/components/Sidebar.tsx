@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { ChevronsLeftIcon, ChevronsRightIcon } from './icons'
-import { LayerSwitcher } from './LayerSwitcher'
 import { FilterButton, FilterPanel } from './FilterBar'
 import { OfflineButton, OfflinePanel } from './OfflinePanel'
 import { StorageButton, StoragePanel } from './StoragePanel'
@@ -112,7 +111,6 @@ export function Sidebar() {
         </span>
       </button>
       <div className="sidebar-controls">
-        <LayerSwitcher />
         <FilterButton />
         <button
           className="filter-button sidebar-collapse"

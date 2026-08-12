@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl'
 import type { Feature, FeatureCollection, Point } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { mapStyle, applyBaseLayer } from './layers'
+import { LayersControl } from './layersControl'
 import {
   addHintLayers,
   etakFilter,
@@ -15,6 +16,17 @@ import {
   hintSpotProps,
   type HintProps,
 } from './hints'
+import {
+  addZoneLayers,
+  setZonesVisible,
+  zoneFeatureCollection,
+  zoneFilter,
+  zonePopupHtml,
+  ZONE_FILL_LAYER,
+  ZONE_LINE_LAYER,
+  ZONE_SOURCE,
+  type ZoneFeatureProps,
+} from './zones'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { useFilteredBandos, resolveBando, revealPlace } from '../state/filters'
@@ -23,6 +35,12 @@ import { HINT_SOURCES, PHOTO_URL, type Bando, type HintSourceId, type UserMark }
 
 const ESTONIA_BOUNDS: [number, number, number, number] = [21.5, 57.4, 28.3, 59.8]
 const VIEW_KEY = 'bando-map:view'
+
+/** The authority this layer defers to — linked from every zone popup. */
+const ZONE_OFFICIAL_URL = 'https://utm.eans.ee/avm/'
+const ZONE_ATTRIBUTION = `UAS zones: <a href="${ZONE_OFFICIAL_URL}" target="_blank" rel="noopener">EANS</a>`
+/** Most restrictive first — decides which overlapping zone a click reports. */
+const ZONE_RANK = ['prohibited', 'permission', 'caution', 'info'] as const
 
 const isMobile = () => window.matchMedia('(max-width: 640px)').matches
 
@@ -259,6 +277,8 @@ export function MapView() {
       useAppStore.getState().showToast('Location unavailable — check location permissions for this browser'),
     )
     map.addControl(geolocate, 'top-right')
+    // Last in the stack, so it sits directly under "show my location".
+    map.addControl(new LayersControl(), 'top-right')
 
     const publishView = () => {
       const b = map.getBounds()
@@ -320,6 +340,28 @@ export function MapView() {
       })
       // Unclustered spots are photo markers (HTML, see syncPhotoMarkers) —
       // only clusters render as circles.
+
+      // Airspace goes in first, so it sits under every point layer: it is
+      // context for the spots, never something to click through them to.
+      addZoneLayers(map, 'clusters', ZONE_ATTRIBUTION)
+      map.on('click', ZONE_FILL_LAYER, (e) => {
+        const state = useAppStore.getState()
+        if (state.placeDraft || state.moveTarget != null) return
+        const f = e.features?.[0]
+        if (!f) return
+        // Zones overlap heavily near airports; the click lands on the most
+        // restrictive one rather than whichever happens to be drawn on top.
+        const props = e.features!
+          .map((hit) => hit.properties as ZoneFeatureProps)
+          .sort((a, b) => ZONE_RANK.indexOf(a.sev) - ZONE_RANK.indexOf(b.sev))[0]
+        new maplibregl.Popup({ closeButton: true, maxWidth: '320px' })
+          .setLngLat(e.lngLat)
+          .setHTML(zonePopupHtml(props, ZONE_OFFICIAL_URL))
+          .addTo(map)
+        e.preventDefault()
+      })
+      map.on('mouseenter', ZONE_FILL_LAYER, () => (map.getCanvas().style.cursor = 'pointer'))
+      map.on('mouseleave', ZONE_FILL_LAYER, () => (map.getCanvas().style.cursor = ''))
 
       // Hint layers render beneath the clusters; clicking a hint point opens
       // a lightweight popup (hints are leads, not part of the triage flow).
@@ -435,6 +477,22 @@ export function MapView() {
     }
     map.setFilter(hintLayerId('etak'), etakFilter(filters.etakMinM2, filters.etakMinDwell))
   }, [filters, hintData, sourceReady])
+
+  // Airspace zones: fetch on first enable, then drive visibility and the
+  // "affects flight below N m" cut from state.
+  const zoneData = useAppStore((s) => s.zoneData)
+  useEffect(() => {
+    if (filters.zones && !zoneData) useAppStore.getState().loadZones()
+    const map = mapRef.current
+    if (!map || !sourceReady) return
+    setZonesVisible(map, filters.zones)
+    if (zoneData) {
+      ;(map.getSource(ZONE_SOURCE) as maplibregl.GeoJSONSource | undefined)?.setData(zoneFeatureCollection(zoneData))
+    }
+    for (const id of [ZONE_FILL_LAYER, ZONE_LINE_LAYER]) {
+      if (map.getLayer(id)) map.setFilter(id, zoneFilter(filters.zoneCeiling))
+    }
+  }, [filters.zones, filters.zoneCeiling, zoneData, sourceReady])
 
   // Hint deep link (#h/<src>/<id>): once the layer's data is in, zoom to the
   // spot and open its popup — the layer itself was enabled by applyHash.

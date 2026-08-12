@@ -52,6 +52,16 @@ export default defineConfig({
             options: { cacheName: 'bando-data', networkTimeoutSeconds: 4, cacheableResponse: { statuses: [200] } },
           },
           {
+            // Freshness is the whole point of the airspace layer — a cached
+            // restriction that lifted an hour ago is worse than a slow load —
+            // so this goes to the network first and falls back to the cached
+            // copy only when offline, where the app shows the copy's age.
+            // Must precede the /data/ rule below, same as community.json.
+            urlPattern: ({ url }) => url.pathname === '/data/zones.json',
+            handler: 'NetworkFirst',
+            options: { cacheName: 'bando-data', networkTimeoutSeconds: 4, cacheableResponse: { statuses: [200] } },
+          },
+          {
             // Dataset: instant offline load, refreshed in the background.
             urlPattern: ({ url }) => url.pathname.startsWith('/data/'),
             handler: 'StaleWhileRevalidate',

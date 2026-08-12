@@ -29,6 +29,14 @@ resource "aws_dynamodb_table" "sync" {
     name = "pk"
     type = "S"
   }
+
+  # Only the zones throttle counters set expiresAt, and they exist to be
+  # forgotten. Sync documents, submissions and stats items never set it, so
+  # enabling TTL here leaves them untouched.
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
 }
 
 # ----- Lambda -----

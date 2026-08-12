@@ -7,6 +7,57 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.2.0] — 2026-08-12
+
+- **Drone airspace on the map.** Estonia's official UAS geographical zones — the
+  ones behind the national drone map at https://utm.eans.ee/avm/ — draw as their
+  own layer, coloured by how much each zone actually restricts flight. Every
+  zone carries its vertical band, so the layer answers "how high can I legally
+  go here" rather than "am I inside a zone": a countrywide 150–2900 m band
+  covers literally every spot on the map, which makes a bare in-a-zone flag
+  useless. The layer always shows how old its copy is and links the official
+  map as the authority — it is a triage aid for picking spots from the sofa,
+  never an authoritative preflight source. Check https://utm.eans.ee/avm/ and
+  NOTAMs before you fly.
+
+- The copy is refreshed hourly by a scheduled Lambda instead of being fetched by
+  your browser. The source is uncompressed — 5.1 MB whatever encoding you ask
+  for — and served `Cache-Control: private, max-age=1`, so no CDN or browser
+  cache helps, and requesting a smaller area barely does either (a box with 15
+  zones in it still returns 2.1 MB, because a few enormous national rings are in
+  every response). Fetching it per visitor would also send every visitor's IP to
+  EANS and leave the layer blank offline. The Lambda trims the file to 1.11 MB
+  (about 289 kB over the CDN) by dropping a duplicated copy of each zone's
+  geometry and rounding coordinates to 6 decimals.
+
+- A **Refresh** button for when the hourly copy is too old to trust, throttled to
+  3 refreshes per client per day and 10 overall per hour. The per-client counter
+  is keyed by a salted hash of the address that expires on its own, so no raw IP
+  is stored anywhere — the same stance as the rest of the app.
+
+- Needs the backend deployed (`terraform -chdir=infra apply`); the zones layer is
+  not part of the site workflow.
+
+- **Map controls moved out of the panel.** The Map / Aerial / Hybrid choice now
+  sits on the map itself, left of the zoom buttons, so it stays reachable with
+  the panel collapsed or the mobile sheet shut. A **Layers** button under "show
+  my location" opens a menu holding everything drawn on the map — the four hint
+  sources and the airspace zones, each with its own checkbox — plus the airspace
+  height cut, legend, copy age and Refresh. The button only opens and closes the
+  menu; the checkboxes decide what is drawn. Filters is now purely about which
+  spots you see.
+
+- The airspace copy turns **red with a nudge to refresh once no check has
+  succeeded for over 6 hours** — the fetcher runs hourly, so that already means
+  it has been failing.
+
+- Scrolling with the pointer over a number field no longer silently edits it
+  instead of scrolling the page — easy to trigger by accident on a trackpad.
+  The spinner arrows are gone with it, since they misfire the same way.
+
+- Map popups close from a button inset properly in the corner rather than
+  jammed against the edge.
+
 ## [1.1.1] — 2026-08-12
 
 - Approved contributions now land on the **next** page load rather than the one

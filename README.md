@@ -20,6 +20,7 @@ The base map is Maa-amet's own tile service — the same detailed base map, orth
 - **Filters that match how you search** — usage, condition, county, triage status and minimum rating, plus a text search that looks inside your own notes. Rejected spots stay hidden until you ask for them.
 - **Hint layers** — four supplementary sources for leads the register doesn't list: 36,323 ETAK ruin footprints, 3,760 OSM ruins, 3,025 military-heritage sites and 698 officially ownerless buildings, each linking and previewing its own source record.
 - **Remoteness grading** — every ETAK footprint carries its area and its distance to the nearest lived-in house, so the 36k can be cut down to big buildings well clear of occupied yards before you drive anywhere. Both cuts are on by default.
+- **Airspace before you drive** — Estonia's official UAS drone zones, drawn under the spots by default and coloured by how much they actually restrict flying. Each zone carries its vertical band, so the layer answers "how high can I legally go here" instead of "am I in a zone" (a countrywide 150–2900 m band covers every spot on the map). The Layers menu on the map holds the height cut, the legend, the copy's age and a Refresh — refreshed hourly regardless, going red past 6 hours, with https://utm.eans.ee/avm/ and NOTAMs staying the authority before a flight.
 - **Your own places** — add spots the register never had, with names and notes; they ride along in exports.
 - **Corrections** — drag a misplaced pin to where the building actually is (with undo), or fix the register fields themselves.
 - **Community sourcing** — submit those corrections for review; once approved they reach every visitor within seconds, no rescrape. Rejections always come with a reason.
@@ -60,6 +61,11 @@ The pipeline (`scripts/scrape/`):
 5. Downloads one photo per candidate and stores a 480px webp in `public/thumbs/` (local thumbnails keep the map fast and are a step toward full offline use).
 6. Writes `public/data/bandos.json` (geocoded candidates, used by the app) and `data/catalog.json` (everything). Both are gitignored — `npm run publish-data` ships them to S3, which is their only home.
 
+Two files under `data/` are not part of this pipeline: `community.json` (written by the sync
+Lambda when a submission is approved) and `zones.json` (written by the airspace fetcher, see
+[Airspace zones](#airspace-zones)). `npm run publish-data` excludes both, so publishing a scrape
+can never overwrite a fresher Lambda-written copy with a stale local one.
+
 Everything is disk-cached under `data/cache/` (gitignored) — delete it for a fresh run. `SCRAPE_DELAY_MS` (default 3000) and `IMAGE_DELAY_MS` (default 1500) tune request pacing. Be considerate — it's a small public heritage service.
 
 ## Architecture
@@ -71,6 +77,7 @@ Everything is disk-cached under `data/cache/` (gitignored) — delete it for a f
 - **Custom places**: add your own spots (name + notes, no photos) straight onto the map; they live in localStorage and ride along in exports.
 - **Corrections**: the *Move* tool repositions a wrong pin (with undo), the *Edit* tool corrects register fields (name, address, era, usage, condition). Corrections are stored as their own keys in the export. (*Copy fixes* in the filter panel still emits them as `data/overrides.json` content — the manual escape hatch.)
 - **Community sourcing**: the *Contribute* tab collects your shareable changes — moved pins, field edits, added places, and proposed deletions of places that are gone or never belonged (never personal state like shortlists or notes) — and submits each as its own reviewable item, with live status: pending with age, approved, or rejected *always with a reason*. Approving in the *Admin* tab (admin accounts only: review queue with old→new diffs drawn on the map, usage stats, registered users, daily visits by country) republishes `data/community.json`, which every client merges over the dataset on load — corrections go live for everyone in seconds, no rescrape. The UX borrows deliberately: iD's unsaved-count badge, OSMCha's map-diff review, and one-item-per-submission + mandatory rejection reasons to avoid Google Maps' opaque-moderation trap.
+- **Airspace (UAS zones)**: Estonia's official drone-restriction zones as their own layer, coloured by how much a zone actually restricts flight. Each entry keeps its vertical band and its message — the message is where a nominally unrestricted nature zone admits it needs a written permit, so colour alone would misrepresent it. The copy comes from `data/zones.json`, refreshed hourly by a Lambda rather than fetched from the browser (see [Airspace zones](#airspace-zones)); the app shows how fresh it is and links the official map, which stays the authority before a flight.
 - **Deep links**: selecting a spot puts `#b/<id>@<lat>,<lon>` in the URL — share it, and if the receiver doesn't have that spot, the map zooms to the coordinates instead.
 - **Offline (PWA)**: installable; everything browsed (app, dataset, photos, map tiles) is cached automatically and keeps working without signal. The Offline panel is transparent about storage — real byte counts per category, clearable — and lets you save the current map view down to street level, or all spot photos, before heading somewhere remote. Maa-amet serves CORS-clean tiles, so cached sizes are honest (no opaque-response padding).
 - **Cross-device sync (optional)**: sign in from the Offline panel and your marks, notes, custom places and corrections follow you to every device. Merging is per-mark by `updatedAt` (the same logic as JSON import), so devices don't clobber each other. Signed-out use is unaffected — localStorage remains the source of truth.
@@ -148,9 +155,52 @@ aws lambda invoke --function-name bando-map-stats-rollup \
   --cli-binary-format raw-in-base64-out --payload '{"days":7}' /dev/stdout
 ```
 
+## Airspace zones
+
+`backend/zones.mjs` (Terraform in `infra/zones.tf`): Estonia's **UAS geographical zones** — the
+drone-restriction airspace behind the national drone map at https://utm.eans.ee/avm/ — drawn from
+our own copy at `data/zones.json`, refreshed hourly by a scheduled Lambda.
+
+The source is public and unauthenticated, so fetching it straight from the browser looks like the
+obvious choice. It isn't:
+
+- It is **uncompressed** — 5.1 MB on the wire under any `Accept-Encoding` — and served
+  `Cache-Control: private, max-age=1`, so neither the CDN nor the browser cache ever helps. Its
+  `bounds` parameter barely helps either: a box with only 15 zones in it still returns 2.1 MB,
+  because a few enormous national rings are in every response.
+- Every visitor's IP would go to EANS, which breaks the no-third-party promise the rest of the app
+  keeps.
+- The layer would be blank offline.
+
+So the Lambda pays the 5.1 MB once an hour, trims it to **1.11 MB (about 289 kB gzipped over
+CloudFront)** and publishes it to the site bucket. The trim drops
+`properties.geometry.horizontalProjection` — a byte-for-byte duplicate of each feature's own
+geometry, roughly half the payload — and rounds coordinates to 6 decimals (~11 cm, far past what an
+airspace boundary means). The fetcher writes the source's own fields through; what counts as
+restrictive is decided in the app, not in the Lambda.
+
+Every zone carries its vertical band, so the layer answers "how high can I legally go here" rather
+than "is this inside a zone" — the latter is useless, because a countrywide 150–2900 m band covers
+literally every spot on the map. The app always shows how old its copy is and links
+https://utm.eans.ee/avm/ as the authority: **this is a triage aid, never an authoritative preflight
+source** — check the official map and NOTAMs before flying.
+
+**Manual refresh.** `POST /zones/refresh` reruns the fetch on demand, throttled to 3 per client per
+day and 10 globally per hour. Both counters are DynamoDB items claimed with a conditional update
+(so two simultaneous refreshes can't both slip past a limit) and expire via TTL. The per-client one
+is keyed by a salted HMAC of the request IP, so nothing that can be turned back into an address is
+ever written down — the same stance as [Visit stats](#visit-stats). It is the first route in the
+project with no authorizer in front of it; the cost consequence is spelled out in [Cost](#cost).
+
+**Ownership.** `data/zones.json` is written by this Lambda, like `data/community.json` —
+`npm run publish-data` excludes both, so a local publish never overwrites a fresher copy. The file
+is rewritten on every run so its `checkedAt` stays honest about when we last looked, but CloudFront
+is only invalidated when the zones themselves changed. Deploys via `terraform -chdir=infra apply`,
+NOT via the site workflow.
+
 ## Cost
 
-Every resource is tagged (`Project=bando-map`, `Component=site|sync|stats` — see `infra/main.tf`),
+Every resource is tagged (`Project=bando-map`, `Component=site|sync|stats|zones` — see `infra/main.tf`),
 so Cost Explorer can split hosting from the backend once the cost-allocation tags are activated.
 **Both tables below are living documents** (see AGENTS.md): any infra or usage-pattern change
 updates the projections; the Actual column is filled from Cost Explorer after each month closes.
@@ -171,7 +221,18 @@ Projected monthly cost per component, at idle and at ~5 daily active users (~3k 
 | S3 access-log storage (stats) | $0 | <$0.02 | a trimmed 8-field record ≈ 200 B raw, gzipped on delivery — roughly 5–10 MB/month at this traffic. Grows until the seven-year expiry starts biting, topping out around 0.6 GB ≈ $0.015/mo; lower `stats_log_retention_days` to cap it sooner |
 | S3 GETs from the rollup (stats) | $0 | ~$0.02 | **the one stats line that scales with traffic**: every run re-reads its whole window, so cost ≈ log objects/day × `stats_rollup_days` × runs/day × $0.004/10k. At ~200 objects/day, 2 days, 4 runs/day ≈ 48k GETs/month |
 | Rollup Lambda + schedule (stats) | $0 | $0 | 4 invocations/day inside the free tier; EventBridge scheduled rules are free |
-| **Total** | **≈ $0.02** | **≈ $0.12** | ~$1.80 even at 100 DAU |
+| Zones fetcher Lambda (arm64, 512 MB) | $0 | $0 | ~730 runs/mo at roughly 4 s each ≈ 1,460 GB-s — inside the permanent free tier (1M req + 400k GB-s). ~$0.02/mo if that tier ever went away |
+| Zones source transfer | $0 | $0 | 5.1 MB × ~730 ≈ 3.7 GB/mo pulled from EANS; AWS never charges for data in |
+| S3 PUTs + storage (zones) | $0 | <$0.01 | one 1.1 MB PUT per run ≈ $0.004/mo; storage negligible |
+| CloudFront invalidations (zones) | $0 | $0 | only when the zones actually change; even invalidating every run, 730 + deploys stays under the 1,000 free paths/month |
+| DynamoDB (zones meta + throttle) | $0 | <$0.01 | one meta write per run plus two counter writes per manual refresh |
+| API Gateway (POST /zones/refresh) | $0 | <$0.01 | capped at 10/hour globally ≈ 7,200/mo worst case at $1.06/M |
+| **Total** | **≈ $0.02** | **≈ $0.13** | ~$1.80 even at 100 DAU |
+
+One caveat those rows don't carry: `POST /zones/refresh` is the project's first unauthenticated
+route, and API Gateway bills rejected requests too — the DynamoDB counters stop the *work*, not the
+request charge, so a deliberate flood is bounded only by the stage's existing 10 rps / 20 burst
+throttle (~$27/month at the absolute ceiling) and the AWS budget alarm.
 
 Excluded: the Route53 hosted zone ($0.50/mo) — `lagle.xyz` is a pre-existing personal zone shared
 with other projects.
@@ -181,8 +242,8 @@ Running record — add a row when a month starts, fill Actual from Cost Explorer
 
 | Month | Projected | Actual | Notes |
 |---|---|---|---|
-| 2026-08 | ~$0.04 | | sync launched + community review shipped mid-month, visit stats late in the month; a few users at most |
-| 2026-09 | ~$0.12 | | first full month with accounts + submissions + visit stats, assuming ~5 DAU |
+| 2026-08 | ~$0.05 | | sync launched + community review shipped mid-month, visit stats and the hourly airspace fetcher late in the month; a few users at most |
+| 2026-09 | ~$0.13 | | first full month with accounts + submissions + visit stats + hourly zones, assuming ~5 DAU |
 
 ## Deployment
 
@@ -220,6 +281,7 @@ with that version's changelog section as notes (`.github/workflows/release.yml`)
   - OSM ruins: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL — kept as its own dataset (collective database), never merged record-by-record with other sources
   - Military heritage: [Eesti sõjaajaloo teejuht](https://teejuht.esap.ee/) (Eesti Sõjamuuseum / ESAP), used in good faith with attribution — spots link and preview their own [ESAP database](https://db.esap.ee/) record; the photos stay hot-linked from db.esap.ee, never copied into this project
   - Officially ownerless buildings: [Ametlikud Teadaanded](https://www.ametlikudteadaanded.ee/) (peremehetu ehitise hõivamise teated) — spots keep the announcing municipality's contact and link the original notice; last-known-owner names are not redistributed
+- UAS geographical zones: [EANS Estonian drone map](https://utm.eans.ee/avm/) (Lennuliiklusteeninduse AS) — the official airspace feed, refetched hourly and shown with attribution and the age of our copy; advisory here, with the official map and NOTAMs remaining the authority before a flight
 
 The source code is [MIT-licensed](LICENSE). Register data and photos are not part of this repository and remain with their respective owners.
 
