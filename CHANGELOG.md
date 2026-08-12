@@ -2,12 +2,19 @@
 
 All notable changes to Bando Map. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
-[semver](https://semver.org/) (0.x — minor = feature release, patch = fix).
+[semver](https://semver.org/) — minor = feature release, patch = fix.
 
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
-## [Unreleased]
+## [1.0.0] — 2026-08-12
+
+First stable release. Everything on the original roadmap has shipped: the full
+register scraped and mapped, the triage-and-visit workflow, offline use in the
+field, cross-device sync, and community corrections that go live for everyone
+without a rescrape. The version number is the only thing that changes for
+existing users — nothing here needs a migration, and signed-out use still keeps
+localStorage as the source of truth.
 
 - Admin panel: a **Visits** card with daily page views, distinct visitors and a
   per-day country breakdown, plus a separate crawler count so bot spikes can be
