@@ -20,6 +20,17 @@ function panelPadding(): { top: number; left: number; right: number; bottom: num
     : { top: 0, left: 380, right: 0, bottom: 0 }
 }
 
+/**
+ * panelPadding, but only for the chrome actually covering the map right now —
+ * the open sheet on mobile, the docked sidebar on desktop. Zero when they're
+ * out of the way.
+ */
+function livePadding(): { top: number; left: number; right: number; bottom: number } {
+  const { sheetOpen, sidebarCollapsed } = useAppStore.getState()
+  const covered = isMobile() ? sheetOpen : !sidebarCollapsed
+  return covered ? panelPadding() : { top: 0, left: 0, right: 0, bottom: 0 }
+}
+
 const withMargin = (p: { top: number; left: number; right: number; bottom: number }, m: number) => ({
   top: p.top + m,
   left: p.left + m,
@@ -271,7 +282,13 @@ export function MapView() {
         const feature = map.queryRenderedFeatures(e.point, { layers: ['clusters'] })[0]
         const source = map.getSource('bandos') as maplibregl.GeoJSONSource
         const zoom = await source.getClusterExpansionZoom(feature.properties.cluster_id)
-        map.easeTo({ center: (feature.geometry as Point).coordinates as [number, number], zoom })
+        // Center within the visible map area — with the sheet expanded, a
+        // plain center would hide the split-apart dots behind it.
+        map.easeTo({
+          center: (feature.geometry as Point).coordinates as [number, number],
+          zoom,
+          padding: livePadding(),
+        })
       })
       map.on('click', (e) => {
         const state = useAppStore.getState()
