@@ -13,9 +13,16 @@ history — the dates are the real commit dates.
   per-day country breakdown, plus a separate crawler count so bot spikes can be
   told apart from real traffic. The numbers come from CloudFront's own access
   logs (no analytics script, no cookie, no third party): standard logging v2
-  delivers eight fields to a private bucket, a scheduled Lambda folds each day
-  into one DynamoDB item, and raw logs expire after 30 days. Marginal cost is a
-  couple of cents a month — see the README Cost table.
+  delivers eight fields to a private bucket and a scheduled Lambda folds each
+  day into one DynamoDB item. The raw log archive is kept indefinitely so later
+  questions can still be answered against the original records. Marginal cost
+  is a couple of cents a month — see the README Cost table.
+
+- Admin rights now come from membership of an `admin` Cognito group instead of
+  an email allowlist that had to be written into Terraform and mirrored into
+  the frontend bundle. No personal address ships in the app or lives in this
+  repository any more, and granting or revoking admin no longer needs a deploy
+  — see the README "Granting admin".
 
 - Military-heritage (ESAP) hints now open their own database record
   (`db.esap.ee/object/<id>`) instead of the generic object list, preview up

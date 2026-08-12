@@ -7,8 +7,8 @@ import { useAppStore } from '../state/store'
 import { useMarksStore, exportUserData } from '../state/marks'
 import { refreshSubmissions } from '../state/contrib'
 import { refreshAdminOverview } from '../state/admin'
-import { SYNC, syncEnabled, isAdmin } from './config'
-import { completeSignIn, getIdToken, sessionEmail, signOut as authSignOut } from './auth'
+import { SYNC, syncEnabled } from './config'
+import { completeSignIn, getIdToken, sessionEmail, sessionIsAdmin, signOut as authSignOut } from './auth'
 
 let syncing = false
 let pushTimer: ReturnType<typeof setTimeout> | undefined
@@ -20,7 +20,7 @@ export async function syncNow(): Promise<void> {
   if (syncing || !syncEnabled()) return
   const token = await getIdToken()
   if (!token) {
-    setSync({ email: undefined, state: 'idle' })
+    setSync({ email: undefined, admin: false, state: 'idle' })
     return
   }
   syncing = true
@@ -40,9 +40,9 @@ export async function syncNow(): Promise<void> {
       body: JSON.stringify(exportUserData()),
     })
     if (!put.ok) throw new Error(`PUT /sync ${put.status}`)
-    setSync({ email: sessionEmail(), state: 'idle', lastAt: Date.now() })
+    setSync({ email: sessionEmail(), admin: sessionIsAdmin(), state: 'idle', lastAt: Date.now() })
   } catch {
-    setSync({ email: sessionEmail(), state: 'error' })
+    setSync({ email: sessionEmail(), admin: sessionIsAdmin(), state: 'error' })
   } finally {
     syncing = false
   }
@@ -51,7 +51,7 @@ export async function syncNow(): Promise<void> {
 export function signOut() {
   clearTimeout(pushTimer)
   authSignOut()
-  setSync({ email: undefined, state: 'idle', lastAt: undefined })
+  setSync({ email: undefined, admin: false, state: 'idle', lastAt: undefined })
 }
 
 /** App-start hook: finish a login redirect, sync, and auto-push edits. */
@@ -60,10 +60,10 @@ export function initSync() {
   completeSignIn().then(() => {
     const email = sessionEmail()
     if (email) {
-      setSync({ email })
+      setSync({ email, admin: sessionIsAdmin() })
       syncNow()
       refreshSubmissions()
-      if (isAdmin(email)) refreshAdminOverview() // populates the Admin tab badge
+      if (sessionIsAdmin()) refreshAdminOverview() // populates the Admin tab badge
     }
   })
   // Any local edit schedules a push (debounced; the merge makes it idempotent).
