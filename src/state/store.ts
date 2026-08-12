@@ -83,9 +83,6 @@ interface AppState {
   sidebarCollapsed: boolean
   /** Cross-device sync status (email set = signed in). */
   sync: { email?: string; state: 'idle' | 'syncing' | 'error'; lastAt?: number }
-  /** Hint-layer datasets, fetched lazily the first time a layer is enabled. */
-  hintData: Partial<Record<HintSourceId, HintLayerDataset>>
-  loadHint: (id: HintSourceId) => void
   /** Set when a new app version has activated in the background — call it to reload into it. */
   updateApp?: () => void
   setDataset: (d: BandoDataset) => void
@@ -103,6 +100,7 @@ interface AppState {
   setMapView: (view: { bounds: [number, number, number, number]; center: [number, number]; zoom: number }) => void
   setMapZoom: (zoom: number) => void
   setSheetOpen: (open: boolean) => void
+  setSidebarCollapsed: (collapsed: boolean) => void
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined
