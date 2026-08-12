@@ -7,6 +7,16 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.0.1] — 2026-08-12
+
+- Raw CloudFront access logs now expire after seven years instead of being kept
+  forever. Those records are the only place a visitor's IP address is ever
+  written down, so an open-ended archive meant an open-ended retention of them;
+  seven years bounds it. The daily aggregates the Visits card actually reads
+  have never held an address and still have no expiry, so nothing is lost from
+  the visit history — only the raw records behind it age out. Set
+  `stats_log_retention_days` to `null` to keep them indefinitely again.
+
 ## [1.0.0] — 2026-08-12
 
 First stable release. Everything on the original roadmap has shipped: the full

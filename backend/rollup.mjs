@@ -12,8 +12,9 @@
  *
  * Aggregates only. Viewer IPs are used inside a single run to count distinct
  * visitors and are never stored — a day's item holds the count, not the
- * addresses. The raw logs do carry them and are kept indefinitely by default;
- * set stats_log_retention_days to have S3 expire them (see infra/stats.tf).
+ * addresses. The raw logs do carry them, and S3 expires those after seven
+ * years (stats_log_retention_days in infra/stats.tf). The daily items written
+ * here have no expiry, so the visit history outlives the logs it came from.
  */
 import { gunzipSync } from 'node:zlib'
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb'
