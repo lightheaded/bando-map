@@ -11,6 +11,8 @@ interface Tokens {
   /** ms epoch when idToken expires. */
   exp: number
   email?: string
+  /** Member of SYNC.adminGroup per the token's `cognito:groups` claim. */
+  admin?: boolean
 }
 
 const TOKENS_KEY = 'bando-map:auth'
@@ -42,6 +44,7 @@ function fromTokenResponse(r: { id_token: string; refresh_token?: string }): Tok
     refreshToken: r.refresh_token ?? load()?.refreshToken,
     exp: claims.exp * 1000,
     email: claims.email,
+    admin: (claims['cognito:groups'] ?? []).includes(SYNC.adminGroup),
   }
 }
 
@@ -102,6 +105,9 @@ export async function getIdToken(): Promise<string | undefined> {
 }
 
 export const sessionEmail = (): string | undefined => load()?.email
+
+/** Admin per the signed-in token; the API enforces this independently. */
+export const sessionIsAdmin = (): boolean => load()?.admin === true
 
 export function signOut() {
   save(undefined)

@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useAppStore } from '../state/store'
 import { useAdminStore, refreshAdminOverview } from '../state/admin'
 import { decideSubmission } from '../sync/api'
-import { isAdmin } from '../sync/config'
 import { en, type Submission } from '../types'
 import { age } from './ContributePanel'
 import { ShieldIcon } from './icons'
@@ -12,9 +11,9 @@ const REJECT_REASONS = ['duplicate', 'wrong location', "can't verify", 'not a us
 export function AdminButton() {
   const open = useAppStore((s) => s.panel === 'admin')
   const togglePanel = useAppStore((s) => s.togglePanel)
-  const email = useAppStore((s) => s.sync.email)
+  const admin = useAppStore((s) => s.sync.admin)
   const pending = useAdminStore((s) => s.overview?.submissions.filter((x) => x.status === 'pending').length ?? 0)
-  if (!isAdmin(email)) return null
+  if (!admin) return null
   return (
     <button className={open ? 'active' : ''} onClick={() => togglePanel('admin')} aria-expanded={open} title="Review community submissions">
       <ShieldIcon />

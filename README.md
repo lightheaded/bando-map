@@ -73,9 +73,26 @@ Work is tracked on the [Bando Map project board](https://github.com/users/lighth
 
 ## Sync backend
 
-`infra/backend.tf` + `backend/handler.mjs`: Cognito user pool (Lite, hosted UI, email+password — Google federation can be added later) → API Gateway HTTP API with a JWT authorizer (unauthenticated requests never reach compute) → a single Lambda (arm64, Node 22, no build step) → DynamoDB on-demand at `api.bando.lagle.xyz`. One sync document per user, plus community submissions in the same table (`pk=sub#<uuid>`; listing scans — at this scale that beats a GSI). Routes: `GET|PUT /sync`, `GET|POST /submissions`, and `GET /admin/overview` + `POST /admin/submissions/{id}` gated by the `ADMIN_EMAILS` allowlist (terraform `admin_emails`, mirrored for UI-visibility only in `src/sync/config.ts`). Approvals rebuild `data/community.json` from all approved submissions and publish it to the site bucket + invalidate CloudFront. Deploys via `terraform -chdir=infra apply` (the handler zip is content-hashed). The SPA config (API URL, Cognito domain, client id — all public identifiers) lives in `src/sync/config.ts`.
+`infra/backend.tf` + `backend/handler.mjs`: Cognito user pool (Lite, hosted UI, email+password — Google federation can be added later) → API Gateway HTTP API with a JWT authorizer (unauthenticated requests never reach compute) → a single Lambda (arm64, Node 22, no build step) → DynamoDB on-demand at `api.bando.lagle.xyz`. One sync document per user, plus community submissions in the same table (`pk=sub#<uuid>`; listing scans — at this scale that beats a GSI). Routes: `GET|PUT /sync`, `GET|POST /submissions`, and `GET /admin/overview` + `POST /admin/submissions/{id}` gated on membership of the `admin` Cognito group (see [Granting admin](#granting-admin)). Approvals rebuild `data/community.json` from all approved submissions and publish it to the site bucket + invalidate CloudFront. Deploys via `terraform -chdir=infra apply` (the handler zip is content-hashed). The SPA config (API URL, Cognito domain, client id — all public identifiers) lives in `src/sync/config.ts`.
 
 Everything scales to zero — cost details live in the [Cost](#cost) section below.
+
+### Granting admin
+
+Admin rights come from membership of the `admin` Cognito group, never from a
+list in this repo — no personal email address belongs in version control or in
+the shipped bundle. The Lambda checks the token's `cognito:groups` claim on
+every `/admin/*` route; the frontend reads the same claim to show the Admin tab.
+
+```sh
+POOL=$(terraform -chdir=infra output -raw cognito_user_pool_id)
+aws cognito-idp admin-add-user-to-group \
+  --user-pool-id "$POOL" --group-name admin --username '<email>'   # your own address, not committed
+```
+
+Group changes take effect on the user's next token refresh (sign out and back
+in for an immediate switch). List current admins with
+`aws cognito-idp list-users-in-group --user-pool-id "$POOL" --group-name admin`.
 
 ## Cost
 

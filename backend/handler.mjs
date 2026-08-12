@@ -9,8 +9,8 @@
  *   POST /admin/submissions/{id}  <- { action, reason? }            -> { submission } (admin)
  *
  * The API Gateway JWT authorizer validates the Cognito ID token before this
- * code runs; admin routes additionally require the token's email to be in
- * ADMIN_EMAILS. Approving a submission rebuilds data/community.json from all
+ * code runs; admin routes additionally require the token to carry the
+ * ADMIN_GROUP Cognito group. Approving a submission rebuilds data/community.json from all
  * approved submissions and publishes it to the site bucket + invalidates the
  * CloudFront path, so decisions reach every client without a rescrape.
  *
@@ -30,7 +30,7 @@ const cloudfront = new CloudFrontClient({})
 const cognito = new CognitoIdentityProviderClient({})
 
 const TABLE = process.env.TABLE_NAME
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? '').split(',').filter(Boolean)
+const ADMIN_GROUP = process.env.ADMIN_GROUP ?? 'admin'
 const SITE_BUCKET = process.env.SITE_BUCKET
 const DISTRIBUTION_ID = process.env.DISTRIBUTION_ID
 const USER_POOL_ID = process.env.USER_POOL_ID
@@ -319,12 +319,24 @@ async function putSync(claims, event) {
 
 // ---------- router ----------
 
+/**
+ * Cognito group names from the JWT claims. The HTTP API authorizer flattens
+ * multi-value claims to a bracketed string (`"[admin, other]"`) rather than an
+ * array, so accept both shapes.
+ */
+function groups(claims) {
+  const raw = claims['cognito:groups']
+  if (Array.isArray(raw)) return raw
+  if (typeof raw !== 'string') return []
+  return raw.replace(/^\[|\]$/g, '').split(/,\s*/).filter(Boolean)
+}
+
 export const handler = async (event) => {
   const claims = event.requestContext?.authorizer?.jwt?.claims
   if (!claims?.sub) return res(401, { error: 'unauthenticated' })
 
   const route = event.routeKey ?? `${event.requestContext?.http?.method} ${event.rawPath}`
-  if (route.includes('/admin/') && !ADMIN_EMAILS.includes(claims.email)) {
+  if (route.includes('/admin/') && !groups(claims).includes(ADMIN_GROUP)) {
     return res(403, { error: 'admin only' })
   }
 

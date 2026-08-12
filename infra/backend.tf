@@ -9,12 +9,12 @@ variable "api_domain" {
   default = "api.bando.lagle.xyz"
 }
 
-# Emails allowed on the /admin/* routes (community-submission review). The
-# frontend mirrors this list in src/sync/config.ts, but only for showing the
-# Admin tab — this is the list that's enforced.
-variable "admin_emails" {
-  type    = list(string)
-  default = ["admin@example.invalid"]
+# Admins are members of the Cognito group below. Membership is granted
+# out-of-band (see README "Granting admin") and lives only in Cognito — no
+# personal identifiers in this repo or in the shipped frontend bundle.
+variable "admin_group" {
+  type    = string
+  default = "admin"
 }
 
 # ----- Data -----
@@ -109,7 +109,7 @@ resource "aws_lambda_function" "sync" {
   environment {
     variables = {
       TABLE_NAME      = aws_dynamodb_table.sync.name
-      ADMIN_EMAILS    = join(",", var.admin_emails)
+      ADMIN_GROUP     = aws_cognito_user_group.admin.name
       SITE_BUCKET     = aws_s3_bucket.site.bucket
       DISTRIBUTION_ID = aws_cloudfront_distribution.site.id
       USER_POOL_ID    = aws_cognito_user_pool.users.id
@@ -143,6 +143,16 @@ resource "aws_cognito_user_pool" "users" {
       priority = 1
     }
   }
+}
+
+# Membership in this group is what grants admin — added per user with
+# `aws cognito-idp admin-add-user-to-group`, never listed in code. The group
+# name lands in the ID token's `cognito:groups` claim, which both the Lambda
+# (enforcement) and the frontend (Admin tab visibility) read.
+resource "aws_cognito_user_group" "admin" {
+  name         = var.admin_group
+  user_pool_id = aws_cognito_user_pool.users.id
+  description  = "Can review and decide community submissions"
 }
 
 resource "aws_cognito_user_pool_domain" "auth" {
@@ -230,7 +240,7 @@ resource "aws_apigatewayv2_route" "sync_put" {
 }
 
 # Community submissions + admin review — same Lambda, same JWT authorizer
-# (the handler enforces ADMIN_EMAILS on the /admin/* routes).
+# (the handler requires the admin group on the /admin/* routes).
 resource "aws_apigatewayv2_route" "community" {
   for_each = toset([
     "GET /submissions",

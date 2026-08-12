@@ -7,11 +7,11 @@ export const SYNC = {
   authDomain: 'https://bando-map.auth.eu-north-1.amazoncognito.com',
   clientId: '5mb278mpp2afjblnnd0behb3bd',
   /**
-   * Who sees the Admin tab. Cosmetic only — the API enforces the real list
-   * (ADMIN_EMAILS in infra/backend.tf) on every /admin route.
+   * Cognito group whose members see the Admin tab. Cosmetic only — the API
+   * re-checks the same group claim on every /admin route. Membership lives in
+   * Cognito, so no personal identifier ships in this bundle.
    */
-  adminEmails: ['admin@example.invalid'],
+  adminGroup: 'admin',
 }
 
 export const syncEnabled = () => SYNC.clientId !== ''
-export const isAdmin = (email?: string) => !!email && SYNC.adminEmails.includes(email)
