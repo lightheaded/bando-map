@@ -13,6 +13,21 @@ Data comes from the Estonian heritage register's [XX century architecture catalo
 
 The base map is Maa-amet's own tile service — the same detailed base map, orthophoto, and hybrid layers as the official maainfo app.
 
+## Features
+
+- **Every candidate on one map** — 324 spots distilled from ~1,950 register records, all but one with photos, each carrying address, era, usage and condition and linking back to the register, Google Maps and Maa-amet XGIS.
+- **Triage, then fly** — shortlist the promising ones and reject the duds from the sofa; mark them visited, rate 1–5 and take notes in the field. Marker colour carries the state: red new, blue shortlisted, green visited, grey rejected.
+- **Filters that match how you search** — usage, condition, county, triage status and minimum rating, plus a text search that looks inside your own notes. Rejected spots stay hidden until you ask for them.
+- **Hint layers** — four supplementary sources for leads the register doesn't list: 36,323 ETAK ruin footprints, 3,760 OSM ruins, 3,025 military-heritage sites and 698 officially ownerless buildings, each linking and previewing its own source record.
+- **Remoteness grading** — every ETAK footprint carries its area and its distance to the nearest lived-in house, so the 36k can be cut down to big buildings well clear of occupied yards before you drive anywhere. Both cuts are on by default.
+- **Your own places** — add spots the register never had, with names and notes; they ride along in exports.
+- **Corrections** — drag a misplaced pin to where the building actually is (with undo), or fix the register fields themselves.
+- **Community sourcing** — submit those corrections for review; once approved they reach every visitor within seconds, no rescrape. Rejections always come with a reason.
+- **Cross-device sync (optional)** — sign in and your marks, notes, places and corrections follow you everywhere. Signed-out use is untouched: localStorage stays the source of truth.
+- **Offline-first** — installable, and everything you have browsed keeps working without signal. Save the current map view down to street level, or every spot photo, before heading somewhere remote.
+- **Deep links** — every spot has a shareable URL; if the receiver's dataset lacks that spot, the map flies to the coordinates instead.
+- **No tracking** — no analytics script, no cookie, no third party. Usage figures are aggregate daily counts derived from the CDN's own access logs (see [Visit stats](#visit-stats)).
+
 ## Quick start
 
 ```sh
@@ -116,12 +131,14 @@ Read the numbers with three caveats:
   per-day country breakdown is what makes a spike judgeable. `visitors` counts distinct viewer
   IPs among human page views; the rollup stores only that count, never an address.
 
-The raw log archive is kept indefinitely, so a question asked later can still be answered against
-the original records — day-partitioned prefixes mean the rollup only ever lists the days it is
-recomputing, so its cost doesn't grow with the archive. Those records do contain viewer IPs (the
-daily aggregates never do): set `stats_log_retention_days` to have S3 expire them after N days, or
-drop `c-ip` from `record_fields` to stop logging them at all (at the price of the `visitors`
-metric, which needs them to tell one person's ten page loads from ten people's).
+The raw log archive is kept for seven years (`stats_log_retention_days`, 2557 days), so a question
+asked later can still be answered against the original records — day-partitioned prefixes mean the
+rollup only ever lists the days it is recomputing, so its cost doesn't grow with the archive. Those
+records contain viewer IPs and the expiry is what bounds how long they are held; the daily
+aggregates never contain one and have no expiry, so the visit history outlives the logs it was
+derived from. Set the variable to `null` to keep the raw logs forever, or drop `c-ip` from
+`record_fields` to stop logging addresses at all — at the price of the `visitors` metric, which
+needs them to tell one person's ten page loads from ten people's.
 
 Delivery lags a request by minutes to about an hour, and changes to the logging *configuration*
 take up to 12 hours to take effect. Force a rebuild of a longer window at any time with:
@@ -151,7 +168,7 @@ Projected monthly cost per component, at idle and at ~5 daily active users (~3k 
 | CloudFront invalidations | $0 | $0 | 1,000 free paths/month; one per deploy + one per submission approval |
 | CloudWatch logs (14 d retention) | $0 | <$0.01 | |
 | Access-log delivery (stats) | $0 | $0 | standard logging v2 to S3 carries no CloudFront or CloudWatch charge |
-| S3 access-log storage (stats) | $0 | <$0.01 | a trimmed 8-field record ≈ 200 B raw, gzipped on delivery — roughly 5–10 MB/month at this traffic. Kept forever by default, so this grows: ~$0.003/mo after a year, ~$0.01/mo after three. Set `stats_log_retention_days` to cap it |
+| S3 access-log storage (stats) | $0 | <$0.02 | a trimmed 8-field record ≈ 200 B raw, gzipped on delivery — roughly 5–10 MB/month at this traffic. Grows until the seven-year expiry starts biting, topping out around 0.6 GB ≈ $0.015/mo; lower `stats_log_retention_days` to cap it sooner |
 | S3 GETs from the rollup (stats) | $0 | ~$0.02 | **the one stats line that scales with traffic**: every run re-reads its whole window, so cost ≈ log objects/day × `stats_rollup_days` × runs/day × $0.004/10k. At ~200 objects/day, 2 days, 4 runs/day ≈ 48k GETs/month |
 | Rollup Lambda + schedule (stats) | $0 | $0 | 4 invocations/day inside the free tier; EventBridge scheduled rules are free |
 | **Total** | **≈ $0.02** | **≈ $0.12** | ~$1.80 even at 100 DAU |

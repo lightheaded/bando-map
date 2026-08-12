@@ -32,14 +32,16 @@ variable "stats_rollup_days" {
 
 variable "stats_log_retention_days" {
   description = <<-EOT
-    Days to keep raw access logs before S3 expires them. null (the default)
-    keeps them forever — the history stays queryable for later analysis, and
-    day-partitioned prefixes mean the rollup's cost doesn't grow with the
-    archive. Note that raw logs carry viewer IPs, so an expiry is the knob that
-    bounds how long those are retained; the daily aggregates never hold one.
+    Days to keep raw access logs before S3 expires them. 2557 (the default) is
+    seven years — 7*365 plus the two leap days any seven-year window can carry,
+    so the archive always covers a full seven years rather than falling a day or
+    two short. Raw logs carry viewer IPs, so this is the knob that bounds how
+    long those are retained; the daily aggregates never hold one and are kept
+    indefinitely, so the visit history outlives the records it came from. Set
+    null to keep the raw logs forever instead.
   EOT
   type        = number
-  default     = null
+  default     = 2557
   nullable    = true
 }
 
@@ -66,8 +68,8 @@ resource "aws_s3_bucket_public_access_block" "logs" {
   restrict_public_buckets = true
 }
 
-# Only created when stats_log_retention_days is set; the archive is kept
-# indefinitely by default (a few MB a month — see README "Cost").
+# Expires the raw logs after stats_log_retention_days (seven years by default).
+# Skipped entirely if that is set to null, which keeps them forever.
 resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   count  = var.stats_log_retention_days == null ? 0 : 1
   bucket = aws_s3_bucket.logs.id
