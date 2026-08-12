@@ -19,6 +19,28 @@ export const fetchMySubmissions = () => request<{ submissions: Submission[] }>('
 export const postSubmission = (data: SubmissionData) =>
   request<{ submission: Submission }>('/submissions', { method: 'POST', body: JSON.stringify(data) })
 
+/** A prepared photo plus what it is a photo of. `own` is the licence declaration. */
+export interface PhotoUpload {
+  targetId: number
+  name: string
+  own: true
+  credit?: string
+  note?: string
+  full: string
+  thumb: string
+}
+
+export const postPhoto = (body: PhotoUpload) =>
+  request<{ submission: Submission }>('/photos', { method: 'POST', body: JSON.stringify(body) })
+
+/**
+ * Both renders of a photo submission, base64. Pending photos are not on the CDN,
+ * so this is the only way to look at one — the API allows it for the contributor
+ * and for reviewers.
+ */
+export const fetchPhoto = (id: string) =>
+  request<{ full: string; thumb: string; contentType: string }>(`/photos/${id}`)
+
 /**
  * One day of traffic, rolled up from CloudFront access logs (backend/rollup.mjs).
  * `views` and `visitors` count clients with a browser-like user agent, `botViews`

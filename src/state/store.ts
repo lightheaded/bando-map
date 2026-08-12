@@ -18,9 +18,10 @@ function mergeCommunity(raw: Bando[], c?: CommunityData): Bando[] {
   const deleted = new Set(c.deleted ?? [])
   const merged = raw.filter((b) => !deleted.has(b.id)).map((b) => {
     const o = c.overrides[b.id]
-    if (!o) return b
+    const communityPhotos = c.photos?.[b.id]
+    if (!o) return communityPhotos ? { ...b, communityPhotos } : b
     const { lat, lon, ...fields } = o
-    const out = { ...b }
+    const out = { ...b, ...(communityPhotos ? { communityPhotos } : {}) }
     for (const [key, value] of Object.entries(fields)) {
       if (value != null) (out as unknown as Record<string, unknown>)[key] = value
     }
@@ -47,6 +48,7 @@ function mergeCommunity(raw: Bando[], c?: CommunityData): Bando[] {
       geocode: 'manual',
       photos: [],
       community: true,
+      communityPhotos: c.photos?.[p.id],
     })
   }
   return merged

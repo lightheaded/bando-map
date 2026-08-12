@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { EditIcon, MapPinIcon, TrashIcon } from './icons'
+import { PhotoUpload } from './PhotoUpload'
 import { placeToBando, resolveBando } from '../state/filters'
 import { wgs84ToLest97 } from '../geo/lest97'
 import {
@@ -12,6 +13,7 @@ import {
   CONDITION_VALUES,
   MUINAS_DETAIL_URL,
   PHOTO_URL,
+  COMMUNITY_PHOTO_URL,
   PDF_URL,
   GMAPS_URL,
   XGIS_URL,
@@ -389,7 +391,7 @@ export function DetailContent() {
           </div>
         </>
       )}
-      {item.photos.length > 0 && (
+      {(item.photos.length > 0 || !!item.communityPhotos?.length) && (
         <div className="photos">
           {item.photos.map((p, i) => (
             <a key={p} href={PHOTO_URL(p)} target="_blank" rel="noreferrer" title="Open full size">
@@ -400,8 +402,26 @@ export function DetailContent() {
               />
             </a>
           ))}
+          {/* Contributed photos come after the register's own, marked as such:
+              they are the recent ones, and often the only ones for a place the
+              register never held. */}
+          {item.communityPhotos?.map((token) => (
+            <a
+              key={token}
+              className="photo-community"
+              href={COMMUNITY_PHOTO_URL(token)}
+              target="_blank"
+              rel="noreferrer"
+              title="Contributed photo — open full size"
+            >
+              <img src={COMMUNITY_PHOTO_URL(token, 'thumb')} alt={item.name} loading="lazy" />
+            </a>
+          ))}
         </div>
       )}
+      {/* A place still only on this device has an id nobody else knows, so
+          there is nothing to attach a photo to yet — submit the place first. */}
+      {mode === 'view' && shared && <PhotoUpload item={item} />}
       <div className="coords-row">
         <code>{coords}</code>
         {mark?.fix && (

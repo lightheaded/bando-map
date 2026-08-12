@@ -606,6 +606,88 @@ fieldset legend {
   transform: scale(1.04);
 }
 
+/* A contributed photo says so, quietly — the corner badge is enough to tell it
+   apart from the register's own without captioning every thumbnail. */
+.detail-panel .photos a.photo-community {
+  position: relative;
+}
+
+.detail-panel .photos a.photo-community::after {
+  content: '🌍';
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.55);
+  pointer-events: none;
+}
+
+/* ----- Adding a photo ----- */
+
+.photo-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.photo-add .btn svg {
+  margin-right: 5px;
+  vertical-align: -2px;
+}
+
+.photo-draft {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.photo-draft > img {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.photo-draft-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.photo-draft-form .checkbox {
+  display: flex;
+  flex-direction: row;
+  /* The label wraps to two lines at phone widths — align the box to the first
+     one rather than to the middle of the block. */
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.photo-draft-form .checkbox input {
+  margin: 1px 0 0;
+  flex-shrink: 0;
+}
+
+/* The reviewer sees the full-size render, not the thumbnail — a photo is judged
+   at the size it will be published at. */
+.photo-review img {
+  display: block;
+  width: 100%;
+  border-radius: 10px;
+  margin-bottom: 6px;
+}
+
 .coords-row {
   display: flex;
   align-items: center;

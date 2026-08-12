@@ -24,6 +24,7 @@ The base map is Maa-amet's own tile service — the same detailed base map, orth
 - **Your own places** — add spots the register never had, with names and notes; they ride along in exports.
 - **Corrections** — drag a misplaced pin to where the building actually is (with undo), or fix the register fields themselves.
 - **Community sourcing** — submit those corrections for review; once approved they reach every visitor within seconds, no rescrape. Rejections always come with a reason.
+- **Contributed photos** — add your own photo of a place: the register's pictures are often decades old, and a spot the community added has none at all. The browser downscales and re-encodes before uploading, which is also what removes the original's EXIF — the GPS tag where it was taken included. Every photo waits for review, and only your own work is accepted.
 - **Cross-device sync (optional)** — sign in and your marks, notes, places and corrections follow you everywhere. Signed-out use is untouched: localStorage stays the source of truth.
 - **Offline-first** — installable, and everything you have browsed keeps working without signal. Save the current map view down to street level, or every spot photo, before heading somewhere remote.
 - **Deep links** — every spot has a shareable URL; if the receiver's dataset lacks that spot, the map flies to the coordinates instead.
@@ -97,9 +98,39 @@ history is readable without the board.
 
 ## Sync backend
 
-`infra/backend.tf` + `backend/handler.mjs`: Cognito user pool (Lite, hosted UI, email+password — Google federation can be added later) → API Gateway HTTP API with a JWT authorizer (unauthenticated requests never reach compute) → a single Lambda (arm64, Node 22, no build step) → DynamoDB on-demand at `api.bando.lagle.xyz`. One sync document per user, plus community submissions in the same table (`pk=sub#<uuid>`; listing scans — at this scale that beats a GSI). Routes: `GET|PUT /sync`, `GET|POST /submissions`, and `GET /admin/overview` + `POST /admin/submissions/{id}` gated on membership of the `admin` Cognito group (see [Granting admin](#granting-admin)). Approvals rebuild `data/community.json` from all approved submissions and publish it to the site bucket + invalidate CloudFront; an approved deletion adds its id to that file's `deleted` list, which every client filters the dataset against. Deploys via `terraform -chdir=infra apply` (the handler zip is content-hashed). The SPA config (API URL, Cognito domain, client id — all public identifiers) lives in `src/sync/config.ts`.
+`infra/backend.tf` + `backend/handler.mjs`: Cognito user pool (Lite, hosted UI, email+password — Google federation can be added later) → API Gateway HTTP API with a JWT authorizer (unauthenticated requests never reach compute) → a single Lambda (arm64, Node 22, no build step) → DynamoDB on-demand at `api.bando.lagle.xyz`. One sync document per user, plus community submissions in the same table (`pk=sub#<uuid>`; listing scans — at this scale that beats a GSI). Routes: `GET|PUT /sync`, `GET|POST /submissions`, `POST /photos` + `GET /photos/{id}`, and `GET /admin/overview` + `POST /admin/submissions/{id}` gated on membership of the `admin` Cognito group (see [Granting admin](#granting-admin)). Approvals rebuild `data/community.json` from all approved submissions and publish it to the site bucket + invalidate CloudFront; an approved deletion adds its id to that file's `deleted` list, which every client filters the dataset against. Deploys via `terraform -chdir=infra apply` (the handler zip is content-hashed). The SPA config (API URL, Cognito domain, client id — all public identifiers) lives in `src/sync/config.ts`.
 
 Everything scales to zero — cost details live in the [Cost](#cost) section below.
+
+### Contributed photos
+
+The upload path is deliberately lopsided: the browser does the image work, the
+backend does none. `src/photos/prepare.ts` decodes the chosen file, downscales it
+to a 1600 px view copy and a 480 px thumbnail and re-encodes both as webp (JPEG
+where a browser can't encode webp). Three things follow from that. The original's
+metadata is gone, because a canvas carries none — no EXIF parser to trust and no
+GPS coordinates to leak. A 6 MB phone photo becomes ~200 KB before it leaves the
+device. And no image decoder ever runs in our account, so there is no
+libvips-shaped attack surface to keep patched: `POST /photos` reads the container
+header for the format and dimensions (`imageSize` in `backend/handler.mjs`,
+refusing anything it can't parse) and then only moves bytes.
+
+Uploads land in a private review bucket under `pending/<submission id>/`. It has
+no CloudFront origin, so nothing unreviewed is reachable from the site; the
+reviewer sees the image through `GET /photos/{id}`, which serves it from that
+bucket to the contributor and to admins and to nobody else. Approval copies both
+renders into the site bucket under `data/photos/` (immutable caching — a
+published photo never changes under its name) and lists the token in
+`data/community.json` under `photos`. Withdrawing an approval deletes them
+again. The review copy stays as the record of what was uploaded until its
+180-day lifecycle rule expires it.
+
+Per contributor: 20 photos a day, 30 waiting for review at once. The limits are
+not about cost — storage and processing here round to zero (see
+[Cost](#cost)) — but about the one resource that doesn't scale, which is the
+time it takes to look at each one. Only own work is accepted, declared per
+upload; the register's photos are not ours to redistribute and neither is
+anyone else's.
 
 ### Granting admin
 
@@ -200,7 +231,7 @@ NOT via the site workflow.
 
 ## Cost
 
-Every resource is tagged (`Project=bando-map`, `Component=site|sync|stats|zones` — see `infra/main.tf`),
+Every resource is tagged (`Project=bando-map`, `Component=site|sync|stats|zones|photos` — see `infra/main.tf`),
 so Cost Explorer can split hosting from the backend once the cost-allocation tags are activated.
 **Both tables below are living documents** (see AGENTS.md): any infra or usage-pattern change
 updates the projections; the Actual column is filled from Cost Explorer after each month closes.
@@ -227,12 +258,24 @@ Projected monthly cost per component, at idle and at ~5 daily active users (~3k 
 | CloudFront invalidations (zones) | $0 | $0 | only when the zones actually change; even invalidating every run, 730 + deploys stays under the 1,000 free paths/month |
 | DynamoDB (zones meta + throttle) | $0 | <$0.01 | one meta write per run plus two counter writes per manual refresh |
 | API Gateway (POST /zones/refresh) | $0 | <$0.01 | capped at 10/hour globally ≈ 7,200/mo worst case at $1.06/M |
-| **Total** | **≈ $0.02** | **≈ $0.13** | ~$1.80 even at 100 DAU |
+| S3 storage (contributed photos) | $0 | <$0.01 | ~210 KB per approved photo (1600 px + 480 px webp), plus a review copy that expires after 180 days. 200 photos ≈ 42 MB ≈ $0.001/mo; even 5,000 ≈ 1 GB ≈ $0.024/mo |
+| Lambda + API Gateway (photo upload, preview, publish) | $0 | <$0.01 | two requests per upload plus one per review preview. No image decoding happens server-side — the browser resizes and re-encodes — so this is base64 decoding and S3 copies, far inside the free tier even at 1,000 uploads/month |
+| CloudFront egress (contributed photos) | $0 | $0 | thumbnails are the same ~30 KB as the register's; a heavy 50-place session with community photos adds ~4 MB, so ~600 MB/month at 5 DAU against a **1 TB** permanent free tier. It would take ~250,000 such sessions a month to leave it |
+| **Total** | **≈ $0.02** | **≈ $0.14** | ~$1.85 even at 100 DAU |
 
 One caveat those rows don't carry: `POST /zones/refresh` is the project's first unauthenticated
 route, and API Gateway bills rejected requests too — the DynamoDB counters stop the *work*, not the
 request charge, so a deliberate flood is bounded only by the stage's existing 10 rps / 20 burst
 throttle (~$27/month at the absolute ceiling) and the AWS budget alarm.
+
+Photo uploads are the other line worth stating a ceiling for, because they are the only route that
+stores what a caller sends. They require a signed-in account and are capped per contributor (20/day,
+30 pending), so the review bucket can't be turned into free storage; without those caps, a scripted
+account pushing 10,000 uploads would still only cost single-digit dollars — ~$2 of transient storage
+until the lifecycle rule expires it, and pennies of requests, because nothing decodes the images.
+The one genuinely open-ended risk is somebody else hot-linking the *published* photos hard enough to
+exhaust the 1 TB CloudFront free tier, where overage runs ~$85/TB in Europe; the budget alarm would
+catch that long before a bill, and a Referer check is the fix if it ever happens.
 
 Excluded: the Route53 hosted zone ($0.50/mo) — `lagle.xyz` is a pre-existing personal zone shared
 with other projects.
@@ -243,7 +286,7 @@ Running record — add a row when a month starts, fill Actual from Cost Explorer
 | Month | Projected | Actual | Notes |
 |---|---|---|---|
 | 2026-08 | ~$0.05 | | sync launched + community review shipped mid-month, visit stats and the hourly airspace fetcher late in the month; a few users at most |
-| 2026-09 | ~$0.13 | | first full month with accounts + submissions + visit stats + hourly zones, assuming ~5 DAU |
+| 2026-09 | ~$0.14 | | first full month with accounts + submissions + contributed photos + visit stats + hourly zones, assuming ~5 DAU |
 
 ## Deployment
 
@@ -281,6 +324,7 @@ with that version's changelog section as notes (`.github/workflows/release.yml`)
   - OSM ruins: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL — kept as its own dataset (collective database), never merged record-by-record with other sources
   - Military heritage: [Eesti sõjaajaloo teejuht](https://teejuht.esap.ee/) (Eesti Sõjamuuseum / ESAP), used in good faith with attribution — spots link and preview their own [ESAP database](https://db.esap.ee/) record; the photos stay hot-linked from db.esap.ee, never copied into this project
   - Officially ownerless buildings: [Ametlikud Teadaanded](https://www.ametlikudteadaanded.ee/) (peremehetu ehitise hõivamise teated) — spots keep the announcing municipality's contact and link the original notice; last-known-owner names are not redistributed
+- Contributed photos: their photographers, who declare the photo their own work when they upload it and agree to it being published here. They are not part of this repository and are not offered for reuse; a photographer who wants one taken down should [open an issue](https://github.com/lightheaded/bando-map/issues) and a reviewer will withdraw the approval, which deletes it from the CDN
 - UAS geographical zones: [EANS Estonian drone map](https://utm.eans.ee/avm/) (Lennuliiklusteeninduse AS) — the official airspace feed, refetched hourly and shown with attribution and the age of our copy; advisory here, with the official map and NOTAMs remaining the authority before a flight
 
 The source code is [MIT-licensed](LICENSE). Register data and photos are not part of this repository and remain with their respective owners.

@@ -34,6 +34,12 @@ export interface Bando {
    * failed), relative to the app base, e.g. "thumbs/45.webp".
    */
   thumbs?: (string | null)[]
+  /**
+   * Approved community photo tokens (from data/community.json), shown after the
+   * register's own photos. Resolved with COMMUNITY_PHOTO_URL — unlike `thumbs`
+   * these live only on the CDN, never in the repo.
+   */
+  communityPhotos?: string[]
 }
 
 export interface BandoDataset {
@@ -236,19 +242,42 @@ export interface Submission {
 export interface SubmissionData {
   /**
    * 'edit' corrects a register record; 'place' proposes a new spot; 'delete'
-   * asks for one to be taken off the shared map altogether.
+   * asks for one to be taken off the shared map altogether; 'photo' adds a
+   * picture of one (the image itself never rides in this object — see PhotoMeta).
    */
-  type: 'edit' | 'place' | 'delete'
+  type: 'edit' | 'place' | 'delete' | 'photo'
   /** Register id for edits; the (negative) local place id for places. */
   targetId: number
   /** Display name for queues and history. */
   name: string
   /** Register values at submission time, for the reviewer's diff. */
   before?: CommunityOverride
-  /** Empty on a deletion — nothing is being proposed, only removal. */
+  /** Empty on a deletion or a photo — nothing is being proposed about the record. */
   after: CommunityOverride
   /** Free-text context for the reviewer; carries the reason on a deletion. */
   note?: string
+  /** Set on photo submissions only. */
+  photo?: PhotoMeta
+}
+
+/**
+ * What was uploaded with a photo submission. The bytes go to a private review
+ * bucket, keyed by the submission id; only an approval copies them to the CDN
+ * under `file`. Both renders are made in the browser (src/photos/prepare.ts),
+ * which is also what strips the original's metadata — EXIF GPS included.
+ */
+export interface PhotoMeta {
+  /** Published filename, extension included: "<submission id>.webp". */
+  file: string
+  /** Pixel size of the full-size render. */
+  w: number
+  h: number
+  /** Byte size of the full-size render. */
+  bytes: number
+  /** The contributor's own-work declaration. No image is accepted without it. */
+  own: boolean
+  /** Optional credit line, shown under the photo once it is live. */
+  credit?: string
 }
 
 /** data/community.json: approved contributions, applied on every client. */
@@ -262,6 +291,11 @@ export interface CommunityData {
    * community places alike. Every client drops them entirely.
    */
   deleted?: number[]
+  /**
+   * Approved photo tokens per place id, oldest approval first. A deleted place
+   * carries none, even if photos of it were approved before the removal.
+   */
+  photos?: Record<number, string[]>
 }
 
 export const USAGE_VALUES = ['ei kasutata', 'elumaja', 'kasutusel', 'koolimaja', 'sakraalhoone', 'tuletorn'] as const
@@ -313,6 +347,15 @@ export const MUINAS_DETAIL_URL = (id: number) =>
 
 export const PHOTO_URL = (photoId: number) =>
   `https://register.muinas.ee/content/architecture/regular/${photoId}.jpg`
+
+/**
+ * An approved community photo, served from the app's own CDN like the PDFs. The
+ * token is the published filename with its extension; the 480px thumbnail sits
+ * beside the full-size copy under the same name plus a `-t` suffix. Absolute so
+ * the photos also show up in `npm run dev`, where public/data holds no copy.
+ */
+export const COMMUNITY_PHOTO_URL = (token: string, size: 'full' | 'thumb' = 'full') =>
+  `https://bando.lagle.xyz/data/photos/${size === 'thumb' ? token.replace(/(\.\w+)$/, '-t$1') : token}`
 
 /**
  * ESAP gallery thumbnail. The object slug is the hint spot's id ("jg-0730") and

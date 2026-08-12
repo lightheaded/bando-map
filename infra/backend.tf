@@ -39,6 +39,46 @@ resource "aws_dynamodb_table" "sync" {
   }
 }
 
+# ----- Contributed photos, pending review -----
+# Uploads land here and nowhere else until a reviewer approves them: the bucket
+# is private with no CloudFront origin pointing at it, so unreviewed user
+# content is never reachable from the site. Approval copies the two renders into
+# the site bucket under data/photos/; this copy then only exists as the
+# reviewer's record, which is what the lifecycle rule expires.
+#
+# The bytes arrive already downscaled and re-encoded by the browser
+# (src/photos/prepare.ts) — no image decoder runs in our account, so there is no
+# libvips-shaped attack surface here and nothing to keep patched.
+resource "aws_s3_bucket" "photos" {
+  bucket = "bando-map-photo-review"
+  tags   = { Component = "photos" }
+}
+
+resource "aws_s3_bucket_public_access_block" "photos" {
+  bucket                  = aws_s3_bucket.photos.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "photos" {
+  bucket = aws_s3_bucket.photos.id
+
+  rule {
+    id     = "expire-review-copies"
+    status = "Enabled"
+
+    filter {
+      prefix = "pending/"
+    }
+
+    expiration {
+      days = 180
+    }
+  }
+}
+
 # ----- Lambda -----
 
 data "archive_file" "sync_handler" {
@@ -81,6 +121,19 @@ resource "aws_iam_role_policy" "sync_lambda" {
         Action   = ["s3:PutObject"]
         Resource = "${aws_s3_bucket.site.arn}/data/community.json"
       },
+      # Photo uploads: park the renders for review, read them back for the
+      # reviewer, and publish or withdraw the approved copies. Deliberately two
+      # separate scopes — nothing here can touch the rest of the site bucket.
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject"]
+        Resource = "${aws_s3_bucket.photos.arn}/pending/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:DeleteObject"]
+        Resource = "${aws_s3_bucket.site.arn}/data/photos/*"
+      },
       {
         Effect   = "Allow"
         Action   = ["cloudfront:CreateInvalidation"]
@@ -119,6 +172,7 @@ resource "aws_lambda_function" "sync" {
       TABLE_NAME      = aws_dynamodb_table.sync.name
       ADMIN_GROUP     = aws_cognito_user_group.admin.name
       SITE_BUCKET     = aws_s3_bucket.site.bucket
+      PHOTO_BUCKET    = aws_s3_bucket.photos.bucket
       DISTRIBUTION_ID = aws_cloudfront_distribution.site.id
       USER_POOL_ID    = aws_cognito_user_pool.users.id
     }
@@ -253,6 +307,8 @@ resource "aws_apigatewayv2_route" "community" {
   for_each = toset([
     "GET /submissions",
     "POST /submissions",
+    "POST /photos",
+    "GET /photos/{id}",
     "GET /admin/overview",
     "POST /admin/submissions/{id}",
   ])
