@@ -139,6 +139,55 @@ body,
   }
 }
 
+/* ---- Desktop sidebar collapse: the map gets the full viewport ---- */
+.sidebar-collapse {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* Floating corner button that brings the panel back. */
+.sidebar-reveal {
+  position: absolute;
+  z-index: 19;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: #fff;
+  color: #333;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.sidebar-reveal:hover {
+  background: #f4f4f5;
+}
+
+@media (min-width: 641px) {
+  .sidebar {
+    transition: transform 0.25s ease-out;
+  }
+
+  .sidebar.collapsed {
+    transform: translateX(calc(-100% - 20px));
+    pointer-events: none;
+  }
+}
+
+/* Mobile has the bottom sheet — no collapse, no reveal. */
+@media (max-width: 640px) {
+  .sidebar-collapse,
+  .sidebar-reveal {
+    display: none;
+  }
+}
+
 .sidebar-controls {
   display: flex;
   flex-wrap: wrap;

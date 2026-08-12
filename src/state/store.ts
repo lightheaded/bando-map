@@ -79,8 +79,13 @@ interface AppState {
   mapZoom?: number
   /** Mobile bottom sheet expanded to show the list. */
   sheetOpen: boolean
+  /** Desktop: sidebar slid away so the map has the full viewport. */
+  sidebarCollapsed: boolean
   /** Cross-device sync status (email set = signed in). */
   sync: { email?: string; state: 'idle' | 'syncing' | 'error'; lastAt?: number }
+  /** Hint-layer datasets, fetched lazily the first time a layer is enabled. */
+  hintData: Partial<Record<HintSourceId, HintLayerDataset>>
+  loadHint: (id: HintSourceId) => void
   /** Set when a new app version has activated in the background — call it to reload into it. */
   updateApp?: () => void
   setDataset: (d: BandoDataset) => void
@@ -139,6 +144,8 @@ export const useAppStore = create<AppState>((set) => ({
   setMapView: (view) => set({ mapView: view, mapZoom: view.zoom }),
   setMapZoom: (zoom) => set({ mapZoom: zoom }),
   setSheetOpen: (open) => set({ sheetOpen: open }),
+  sidebarCollapsed: false,
+  setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
 }))
 
 // Debug/verification handle (harmless — all state is the user's own, local).
