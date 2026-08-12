@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Notes come from the tag's CHANGELOG.md section (fallback: the tag
+      # annotation body); the title is the tag's one-line subject.
+      - name: Create release from tag + changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          git fetch --force origin "refs/tags/$tag:refs/tags/$tag"
+          awk -v ver="${tag#v}" '
+            $0 ~ "^## \\[" ver "\\]" { on=1; next }
+            on && /^## /            { exit }
+            on                      { print }
+          ' CHANGELOG.md > notes.md
+          grep -q '[^[:space:]]' notes.md || git tag -l --format='%(contents:body)' "$tag" > notes.md
+          { echo "_Released $(git tag -l --format='%(taggerdate:short)' "$tag")_"; cat notes.md; } > full.md
+          subject=$(git tag -l --format='%(contents:subject)' "$tag")
+          gh release create "$tag" --verify-tag --title "$tag — ${subject:-release}" --notes-file full.md
