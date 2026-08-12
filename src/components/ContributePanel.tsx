@@ -5,8 +5,8 @@ import { postSubmission } from '../sync/api'
 import { syncEnabled } from '../sync/config'
 import { signIn } from '../sync/auth'
 import { useOnline } from './useOnline'
-import { EditIcon, MapPinIcon } from './icons'
-import type { Submission } from '../types'
+import { EditIcon, MapPinIcon, TrashIcon } from './icons'
+import type { Submission, SubmissionData } from '../types'
 
 export function ContributeButton() {
   const open = useAppStore((s) => s.panel === 'contribute')
@@ -32,6 +32,25 @@ export function age(iso: string): string {
   if (days > 0) return `${days} d`
   const hours = Math.floor(ms / 3_600_000)
   return hours > 0 ? `${hours} h` : 'just now'
+}
+
+/**
+ * What a submission asked for — a status chip says how it went, but not what
+ * "it" was, and a name alone can't tell an added place from a deleted one.
+ */
+const KINDS = {
+  place: { Icon: MapPinIcon, label: 'Place you added' },
+  edit: { Icon: EditIcon, label: 'Correction you submitted' },
+  delete: { Icon: TrashIcon, label: 'Deletion you asked for' },
+} as const
+
+function KindIcon({ type }: { type: SubmissionData['type'] }) {
+  const { Icon, label } = KINDS[type] ?? KINDS.edit
+  return (
+    <span className={`sub-kind sub-kind-${type}`} title={label} role="img" aria-label={label}>
+      <Icon />
+    </span>
+  )
 }
 
 function StatusChip({ s }: { s: Submission }) {
@@ -199,6 +218,7 @@ export function ContributePanel() {
           <ul className="submission-rows">
             {submissions.slice(0, 20).map((s) => (
               <li key={s.id}>
+                <KindIcon type={s.data.type} />
                 <span className="change-name">{s.data.name}</span>
                 <StatusChip s={s} />
               </li>
