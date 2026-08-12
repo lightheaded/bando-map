@@ -208,6 +208,39 @@ function wireHintPhotoWheel(root: HTMLElement | undefined) {
   )
 }
 
+/**
+ * The hint dot under the cursor, or nothing. Hint layers overlap freely — an
+ * ETAK ruin and its OSM twin are usually the same building — so a click has to
+ * pick one: the dot drawn on top. addHintLayers stacks the layers in
+ * HINT_SOURCES order, so the last source with a hit is the topmost.
+ */
+function topHintHit(
+  map: maplibregl.Map,
+  point: maplibregl.Point,
+): { src: HintSourceId; props: HintProps } | undefined {
+  const layers = HINT_SOURCES.map(hintLayerId).filter((id) => map.getLayer(id))
+  const hits = map.queryRenderedFeatures(point, { layers })
+  if (!hits.length) return undefined
+  for (const src of [...HINT_SOURCES].reverse()) {
+    const hit = hits.find((f) => f.layer.id === hintLayerId(src))
+    if (hit) return { src, props: hit.properties as HintProps }
+  }
+  return undefined
+}
+
+/**
+ * The zone a click reports. Zones overlap heavily near airports; the click
+ * lands on the most restrictive one rather than whichever happens to be drawn
+ * on top.
+ */
+function topZoneHit(map: maplibregl.Map, point: maplibregl.Point): ZoneFeatureProps | undefined {
+  if (!map.getLayer(ZONE_FILL_LAYER)) return undefined
+  return map
+    .queryRenderedFeatures(point, { layers: [ZONE_FILL_LAYER] })
+    .map((hit) => hit.properties as ZoneFeatureProps)
+    .sort((a, b) => ZONE_RANK.indexOf(a.sev) - ZONE_RANK.indexOf(b.sev))[0]
+}
+
 function toGeoJSON(bandos: Bando[], marks: Record<number, UserMark>): FeatureCollection {
   return {
     type: 'FeatureCollection',
@@ -344,22 +377,6 @@ export function MapView() {
       // Airspace goes in first, so it sits under every point layer: it is
       // context for the spots, never something to click through them to.
       addZoneLayers(map, 'clusters', ZONE_ATTRIBUTION)
-      map.on('click', ZONE_FILL_LAYER, (e) => {
-        const state = useAppStore.getState()
-        if (state.placeDraft || state.moveTarget != null) return
-        const f = e.features?.[0]
-        if (!f) return
-        // Zones overlap heavily near airports; the click lands on the most
-        // restrictive one rather than whichever happens to be drawn on top.
-        const props = e.features!
-          .map((hit) => hit.properties as ZoneFeatureProps)
-          .sort((a, b) => ZONE_RANK.indexOf(a.sev) - ZONE_RANK.indexOf(b.sev))[0]
-        new maplibregl.Popup({ closeButton: true, maxWidth: '320px' })
-          .setLngLat(e.lngLat)
-          .setHTML(zonePopupHtml(props, ZONE_OFFICIAL_URL))
-          .addTo(map)
-        e.preventDefault()
-      })
       map.on('mouseenter', ZONE_FILL_LAYER, () => (map.getCanvas().style.cursor = 'pointer'))
       map.on('mouseleave', ZONE_FILL_LAYER, () => (map.getCanvas().style.cursor = ''))
 
@@ -367,14 +384,6 @@ export function MapView() {
       // a lightweight popup (hints are leads, not part of the triage flow).
       addHintLayers(map, 'clusters')
       for (const id of HINT_SOURCES) {
-        map.on('click', hintLayerId(id), (e) => {
-          const state = useAppStore.getState()
-          if (state.placeDraft || state.moveTarget != null) return
-          const f = e.features?.[0]
-          if (!f) return
-          openHintPopup(map, id, f.properties as HintProps)
-          e.preventDefault()
-        })
         map.on('mouseenter', hintLayerId(id), () => (map.getCanvas().style.cursor = 'pointer'))
         map.on('mouseleave', hintLayerId(id), () => (map.getCanvas().style.cursor = ''))
       }
@@ -402,23 +411,12 @@ export function MapView() {
         },
       })
 
-      map.on('click', 'clusters', async (e) => {
-        const state = useAppStore.getState()
-        if (state.placeDraft || state.moveTarget != null) return
-        const feature = map.queryRenderedFeatures(e.point, { layers: ['clusters'] })[0]
-        const source = map.getSource('bandos') as maplibregl.GeoJSONSource
-        const zoom = await source.getClusterExpansionZoom(feature.properties.cluster_id)
-        // Center within the visible map area — with the sheet expanded, a
-        // plain center would hide the split-apart dots behind it.
-        map.easeTo({
-          center: (feature.geometry as Point).coordinates as [number, number],
-          zoom,
-          padding: livePadding(),
-        })
-      })
-      map.on('click', (e) => {
-        // A hint-point click (preventDefault above) shouldn't also deselect.
-        if (e.defaultPrevented) return
+      // One click, one answer. Layer-scoped handlers all fire for the same
+      // click — a hint dot inside an airspace zone used to open both popups at
+      // once — so every map click is resolved here instead, against whatever
+      // sits topmost under the cursor. The airspace fill is the last thing
+      // asked, which makes it clickable only where nothing is drawn over it.
+      map.on('click', async (e) => {
         const state = useAppStore.getState()
         // Move tool: the next tap is the corrected position.
         if (state.moveTarget != null) {
@@ -438,10 +436,36 @@ export function MapView() {
           return
         }
         if (state.placeDraft) return
-        // Photo-marker clicks never reach here (stopPropagation) — a canvas
-        // click outside any cluster means empty map, so deselect.
-        const hits = map.queryRenderedFeatures(e.point, { layers: ['clusters'] })
-        if (!hits.length) select(undefined)
+
+        const cluster = map.queryRenderedFeatures(e.point, { layers: ['clusters'] })[0]
+        if (cluster) {
+          const source = map.getSource('bandos') as maplibregl.GeoJSONSource
+          const zoom = await source.getClusterExpansionZoom(cluster.properties.cluster_id)
+          // Center within the visible map area — with the sheet expanded, a
+          // plain center would hide the split-apart dots behind it.
+          map.easeTo({
+            center: (cluster.geometry as Point).coordinates as [number, number],
+            zoom,
+            padding: livePadding(),
+          })
+          return
+        }
+        const hint = topHintHit(map, e.point)
+        if (hint) {
+          openHintPopup(map, hint.src, hint.props)
+          return
+        }
+        const zone = topZoneHit(map, e.point)
+        if (zone) {
+          new maplibregl.Popup({ closeButton: true, maxWidth: '320px' })
+            .setLngLat(e.lngLat)
+            .setHTML(zonePopupHtml(zone, ZONE_OFFICIAL_URL))
+            .addTo(map)
+          return
+        }
+        // Photo-marker clicks never reach here (stopPropagation), so a click
+        // that hit nothing above means bare map — deselect.
+        select(undefined)
       })
       map.on('mouseenter', 'clusters', () => (map.getCanvas().style.cursor = 'pointer'))
       map.on('mouseleave', 'clusters', () => (map.getCanvas().style.cursor = ''))
