@@ -63,13 +63,15 @@ Everything is disk-cached under `data/cache/` (gitignored) — delete it for a f
 
 ## Roadmap
 
-Work is tracked on the [Bando Map project board](https://github.com/users/lightheaded/projects/2).
+Work is tracked on the public [Bando Map project board](https://github.com/users/lightheaded/projects/2);
+every card there is a [repository issue](https://github.com/lightheaded/bando-map/issues), so the
+history is readable without the board.
 
 - [x] **Phase 0 — POC**: scrape the ~116 unused/poor-condition buildings, geocode, show clustered on the map with photos and detail panel
 - [x] **Phase 1 — Full data pipeline**: all catalog records with usage/condition attribution, local thumbnails, manual coordinate overrides
 - [x] **Phase 2 — User state**: triage workflow (shortlist / reject online, then visit, rate and take notes in the field), multi-select filters, note-aware search, JSON export/import, custom places, shareable deep links
 - [x] **Phase 3 — Polish & offline**: photo markers for unclustered spots, installable PWA with full offline support (app shell, dataset, photos, and saved map areas cached locally with a transparent storage panel)
-- [ ] **Phase 4 — Ideas**: accounts with SSO for cross-device sync, auto-graded attributes (remote vs urban), periodic scraping
+- [x] **Phase 4 — Accounts & auto-grading**: [cross-device sync behind Cognito SSO](https://github.com/lightheaded/bando-map/issues/12), and [auto-graded attributes](https://github.com/lightheaded/bando-map/issues/17) answering "remote or urban?" — every ruin footprint carries its area and its distance to the nearest lived-in house, both computed at scrape time. [Periodic scraping](https://github.com/lightheaded/bando-map/issues/21) is the one idea left over and continues as its own issue.
 
 ## Sync backend
 
@@ -172,14 +174,6 @@ The app is a static site served from S3 behind CloudFront at **https://bando.lag
 - `infra/` holds the Terraform/OpenTofu stack: private S3 origin (OAC), CloudFront with SPA fallback, ACM certificate, Route53 records, and a GitHub-OIDC deploy role — no long-lived AWS keys anywhere. Apply locally: `cd infra && terraform apply` (uses ambient AWS credentials, or pass `-var aws_profile=...`). State is local and gitignored.
 - `.github/workflows/deploy.yml` builds and syncs `dist/` to S3 on every push to `main` (hashed assets get immutable caching; the HTML shell revalidates), then invalidates CloudFront. It authenticates by assuming the OIDC role from repo variables `AWS_DEPLOY_ROLE_ARN`, `S3_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID`. The dataset, thumbnails and PDF archive under `/data/`, `/thumbs/` and `/pdfs/` are published out-of-band (`npm run publish-data`) and deploys never touch them.
 
-## Attribution & license
-
-- Building data: [Kultuurimälestiste register](https://register.muinas.ee/) (Muinsuskaitseamet), reused under Estonia's public information act
-- Base map, orthophoto, geocoding: [Maa-amet](https://geoportaal.maaamet.ee/)
-
-The source code is [MIT-licensed](LICENSE). Register data and photos are not part of this repository and remain with their respective owners.
-
-Fly responsibly: heritage-listed buildings are protected — look, film, don't touch. Check local drone regulations (droonid.ee) before flying.
 ## Versioning & releases
 
 Releases are semver git tags (`v0.x.y`, minor = feature release, patch = fix) with a
@@ -200,8 +194,16 @@ git push --follow-tags
 Pushing the tag auto-creates a [GitHub Release](https://github.com/lightheaded/bando-map/releases)
 with that version's changelog section as notes (`.github/workflows/release.yml`).
 
+## Attribution & license
+
+- Building data: [Kultuurimälestiste register](https://register.muinas.ee/) (Muinsuskaitseamet), reused under Estonia's public information act
+- Base map, orthophoto, geocoding: [Maa-amet](https://geoportaal.maaamet.ee/)
 - Hint layers (optional map overlays, `npm run scrape-hints`):
   - ETAK ruins: [Eesti topograafia andmekogu](https://geoportaal.maaruum.ee/) (Maa- ja Ruumiamet), open-data license, attribution required
   - OSM ruins: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL — kept as its own dataset (collective database), never merged record-by-record with other sources
   - Military heritage: [Eesti sõjaajaloo teejuht](https://teejuht.esap.ee/) (Eesti Sõjamuuseum / ESAP), used in good faith with attribution — spots link and preview their own [ESAP database](https://db.esap.ee/) record; the photos stay hot-linked from db.esap.ee, never copied into this project
   - Officially ownerless buildings: [Ametlikud Teadaanded](https://www.ametlikudteadaanded.ee/) (peremehetu ehitise hõivamise teated) — spots keep the announcing municipality's contact and link the original notice; last-known-owner names are not redistributed
+
+The source code is [MIT-licensed](LICENSE). Register data and photos are not part of this repository and remain with their respective owners.
+
+Fly responsibly: heritage-listed buildings are protected — look, film, don't touch. Check local drone regulations (https://transpordiamet.ee/droonid) before flying.
