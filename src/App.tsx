@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { MapView } from './map/MapView'
 import { Sidebar } from './components/Sidebar'
 import { AddPlaceForm } from './components/AddPlace'
+import { UpdateBanner } from './components/UpdateBanner'
 import { useDeepLink } from './state/deeplink'
 import { useAppStore } from './state/store'
 import { initSync } from './sync/sync'
@@ -39,6 +40,7 @@ export default function App() {
       <MapView />
       <Sidebar />
       <AddPlaceForm />
+      <UpdateBanner />
       <Toast />
     </div>
   )

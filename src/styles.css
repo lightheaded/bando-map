@@ -862,15 +862,45 @@ fieldset legend {
   background: #fdf2f4;
 }
 
-/* ============ Offline panel ============ */
-.update-button {
-  background: #e11d48;
+/* ============ Update banner ============ */
+.update-banner {
+  position: absolute;
+  z-index: 60;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 20px);
+  background: rgba(24, 24, 27, 0.94);
+  color: #fff;
+  font-size: 12.5px;
+  line-height: 1.35;
+  padding: 8px 10px 8px 14px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+.update-banner .btn {
+  flex-shrink: 0;
+}
+
+.update-banner-close {
+  border: none;
+  background: transparent;
+  color: #a1a1aa;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  flex-shrink: 0;
+}
+
+.update-banner-close:hover {
   color: #fff;
 }
 
-.update-button:hover {
-  background: #be123c;
-}
+/* ============ Offline panel ============ */
 
 /* Amber "you are offline" marker on the Downloads tab. */
 .offline-dot {
