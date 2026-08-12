@@ -5,6 +5,7 @@ import { planAreaSave, downloadInto, MAX_SAVE_ZOOM, type SaveProgress } from '..
 import { CACHE_NAMES, cacheStats, fmtBytes, type CacheStats } from '../offline/storage'
 import { useOnline } from './useOnline'
 import { DownloadIcon } from './icons'
+import { COMMUNITY_PHOTO_URL } from '../types'
 
 export function OfflineButton() {
   const open = useAppStore((s) => s.panel === 'offline')
@@ -51,7 +52,19 @@ export function OfflinePanel() {
   if (!open) return null
 
   const plan = mapView ? planAreaSave(mapView.bounds, mapView.zoom, baseLayer) : undefined
-  const thumbs = bandos.flatMap((b) => b.thumbs ?? []).filter((t): t is string => !!t)
+  // Register thumbnails (relative to the app base) and contributed ones (absolute,
+  // straight off the CDN) go into one list, so "download all" means all of them.
+  const contributed = bandos.flatMap((b) => b.communityPhotos ?? [])
+  const thumbs = [
+    ...bandos
+      .flatMap((b) => b.thumbs ?? [])
+      .filter((t): t is string => !!t)
+      .map((t) => new URL(`${import.meta.env.BASE_URL}${t}`, location.href).href),
+    ...contributed.map((token) => COMMUNITY_PHOTO_URL(token, 'thumb')),
+  ]
+  // The dataset states its own thumbnail total; contributed ones are all the same
+  // 480px render, so ~30 KB apiece is close enough to state up front.
+  const photoBytes = (thumbsBytes ?? (thumbs.length - contributed.length) * 30_000) + contributed.length * 30_000
 
   const saveArea = async () => {
     if (!plan || plan.tooBig) return
@@ -67,9 +80,8 @@ export function OfflinePanel() {
 
   const savePhotos = async () => {
     abortRef.current = new AbortController()
-    const urls = thumbs.map((t) => new URL(`${import.meta.env.BASE_URL}${t}`, location.href).href)
-    setSavingPhotos({ done: 0, total: urls.length, bytes: 0, failed: 0 })
-    const result = await downloadInto(CACHE_NAMES.photos, urls, setSavingPhotos, abortRef.current.signal)
+    setSavingPhotos({ done: 0, total: thumbs.length, bytes: 0, failed: 0 })
+    const result = await downloadInto(CACHE_NAMES.photos, thumbs, setSavingPhotos, abortRef.current.signal)
     setSavingPhotos(undefined)
     refresh()
     if (!abortRef.current.signal.aborted) showToast(`Photos downloaded for offline use — ${fmtBytes(result.bytes)}`)
@@ -122,7 +134,10 @@ export function OfflinePanel() {
         <div className="offline-card-head">
           <strong>All spot photos</strong>
           <span className="offline-sub">
-            {thumbs.length} photos · {thumbsBytes ? fmtBytes(thumbsBytes) : `~${fmtBytes(thumbs.length * 30_000)}`}
+            {thumbs.length} photos ·{' '}
+            {/* Exact only when the dataset stated its own total and no
+                contributed photo is in the count — those are estimated. */}
+            {thumbsBytes && !contributed.length ? fmtBytes(photoBytes) : `~${fmtBytes(photoBytes)}`}
           </span>
         </div>
         {savingPhotos ? (

@@ -5,7 +5,7 @@ import { postSubmission } from '../sync/api'
 import { syncEnabled } from '../sync/config'
 import { signIn } from '../sync/auth'
 import { useOnline } from './useOnline'
-import { EditIcon, MapPinIcon, TrashIcon } from './icons'
+import { CameraIcon, EditIcon, MapPinIcon, TrashIcon } from './icons'
 import type { Submission, SubmissionData } from '../types'
 
 export function ContributeButton() {
@@ -42,6 +42,7 @@ const KINDS = {
   place: { Icon: MapPinIcon, label: 'Place you added' },
   edit: { Icon: EditIcon, label: 'Correction you submitted' },
   delete: { Icon: TrashIcon, label: 'Deletion you asked for' },
+  photo: { Icon: CameraIcon, label: 'Photo you uploaded' },
 } as const
 
 function KindIcon({ type }: { type: SubmissionData['type'] }) {
@@ -144,8 +145,8 @@ export function ContributePanel() {
           <strong>Help build the map</strong>
         </div>
         <p className="offline-sub contrib-pitch">
-          Bando Map is community-sourced: move mispinned spots, fix wrong details, add missing places. Submit your
-          changes for review — approved ones go live on everyone's map.
+          Bando Map is community-sourced: move mispinned spots, fix wrong details, add missing places, add your own
+          photos from a place's detail view. Submit your changes for review — approved ones go live on everyone's map.
         </p>
         <button className={`btn btn-small ${picking ? 'btn-active' : ''}`} onClick={startAdd}>
           {picking ? 'Cancel adding' : '+ Add a place'}

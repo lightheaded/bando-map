@@ -116,6 +116,12 @@ export function placeToBando(p: CustomPlace): Bando {
     geocode: 'manual',
     photos: [],
     custom: true,
+    // Once this place is approved, mergeCommunity steps aside for the local copy
+    // — so approved photos of it have to be picked up here, or the contributor
+    // would be the one person who can't see them. Read rather than subscribed:
+    // every caller recomputes when `bandos` changes, which is when community
+    // data arrives.
+    communityPhotos: useAppStore.getState().community?.photos?.[p.id],
   }
 }
 

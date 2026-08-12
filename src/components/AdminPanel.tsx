@@ -1,12 +1,20 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAppStore } from '../state/store'
 import { useAdminStore, refreshAdminOverview } from '../state/admin'
-import { decideSubmission, type VisitDay } from '../sync/api'
+import { decideSubmission, fetchPhoto, type VisitDay } from '../sync/api'
 import { en, type Submission } from '../types'
 import { age } from './ContributePanel'
 import { ShieldIcon } from './icons'
 
-const REJECT_REASONS = ['duplicate', 'wrong location', "can't verify", 'not a usable spot', 'other'] as const
+const REJECT_REASONS = [
+  'duplicate',
+  'wrong location',
+  "can't verify",
+  'not a usable spot',
+  'not your photo',
+  'shows people',
+  'other',
+] as const
 
 export function AdminButton() {
   const open = useAppStore((s) => s.panel === 'admin')
@@ -29,6 +37,55 @@ function distanceMeters(a: { lat: number; lon: number }, b: { lat: number; lon: 
   const dLon = (b.lon - a.lon) * rad
   const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2
   return 6_371_000 * 2 * Math.asin(Math.sqrt(s))
+}
+
+/**
+ * The uploaded image, fetched from the API because a pending photo is not on the
+ * CDN — and cannot be, or review would be decoration. Shown at the size it will
+ * be published at, since what a reviewer is judging is partly whether it is
+ * worth looking at.
+ */
+function PhotoReview({ s }: { s: Submission }) {
+  const [src, setSrc] = useState<string>()
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    let url: string | undefined
+    fetchPhoto(s.id)
+      .then(({ full, contentType }) => {
+        // A blob URL rather than a data: URL, so "open full size" actually opens:
+        // Chrome refuses top-level navigation to data: URLs.
+        const bytes = Uint8Array.from(atob(full), (c) => c.charCodeAt(0))
+        url = URL.createObjectURL(new Blob([bytes], { type: contentType }))
+        if (live) setSrc(url)
+        else URL.revokeObjectURL(url)
+      })
+      .catch(() => live && setFailed(true))
+    return () => {
+      live = false
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [s.id])
+
+  const photo = s.data.photo
+  return (
+    <div className="photo-review">
+      {src ? (
+        <a href={src} target="_blank" rel="noreferrer" title="Open full size">
+          <img src={src} alt={`Photo submitted for ${s.data.name}`} />
+        </a>
+      ) : (
+        <p className="offline-sub">{failed ? 'the uploaded copy could not be loaded' : 'loading the photo…'}</p>
+      )}
+      {photo && (
+        <p className="offline-sub">
+          {photo.w}×{photo.h} · {Math.round(photo.bytes / 1024)} KB · declared own work
+          {photo.credit ? ` · credit: ${photo.credit}` : ''}
+        </p>
+      )}
+    </div>
+  )
 }
 
 /** Old → new per changed field; a pin move shows the distance instead. */
@@ -330,9 +387,16 @@ export function AdminPanel() {
             <span className={`age-chip ${ageClass(s.createdAt)}`}>{age(s.createdAt)}</span>
           </div>
           <p className="offline-sub">
-            {s.data.type === 'place' ? 'new place' : s.data.type === 'delete' ? 'deletion' : 'correction'} · {s.email} ·{' '}
-            {acceptedBy.get(s.email ?? '') ?? 0} accepted
+            {s.data.type === 'place'
+              ? 'new place'
+              : s.data.type === 'delete'
+                ? 'deletion'
+                : s.data.type === 'photo'
+                  ? 'photo'
+                  : 'correction'}{' '}
+            · {s.email} · {acceptedBy.get(s.email ?? '') ?? 0} accepted
           </p>
+          {s.data.type === 'photo' && <PhotoReview s={s} />}
           <DiffRows s={s} />
           <div className="offline-actions queue-actions">
             <button className="btn btn-small" onClick={() => toggleDiff(s)}>

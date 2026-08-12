@@ -7,6 +7,26 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.3.0] — 2026-08-12
+
+- **Photos you took.** A place's detail view now takes your own photo of it. The
+  register's pictures are often decades old and a community-added spot has none
+  at all, so this is where the map gains fidelity it can't scrape. Uploads wait
+  in the same review queue as corrections, show up on everyone's map once
+  approved, and carry an optional credit line.
+
+  The image work happens in your browser, not on a server: the photo is
+  downscaled to a 1600 px copy and a 480 px thumbnail and re-encoded before
+  anything is sent. That is what strips the original's EXIF — the GPS tag where
+  it was taken included — and it cuts a 6 MB phone photo to about 200 KB, so
+  uploading over mobile data is quick. Nothing unreviewed is reachable from the
+  site: pending photos live in a private bucket with no CDN in front of it, and
+  only a reviewer and the contributor can see them. Only your own work is
+  accepted, declared per upload, and there is a limit of 20 photos a day.
+
+  Contributed photos join the offline download alongside the register's, and the
+  panel's stated size covers both.
+
 ## [1.2.1] — 2026-08-12
 
 - **One popup per click.** Clicking a hint dot that sat inside an airspace zone

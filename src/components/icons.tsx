@@ -64,6 +64,13 @@ export const TrashIcon = () => (
   </svg>
 )
 
+export const CameraIcon = () => (
+  <svg {...props}>
+    <path d="M3 8h3l2-3h8l2 3h3v12H3z" />
+    <circle cx="12" cy="13" r="3.5" />
+  </svg>
+)
+
 export const ShieldIcon = () => (
   <svg {...props}>
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
