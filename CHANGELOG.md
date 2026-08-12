@@ -7,6 +7,19 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [Unreleased]
+
+- **Delete a place.** The detail panel's top bar has a red Delete button next to
+  Edit and Move. Deleting your own place — one you added and haven't contributed
+  yet — is immediate and local, as before. Everything else on the shared map
+  (register records, community spots, places of yours that were approved) goes
+  through review instead: pick a reason, and the deletion queues in Contribute
+  alongside your pin moves and corrections. The pin stays on your map, tagged
+  *deletion proposed*, until an admin decides; Undo delete withdraws it any time
+  before that. Approved deletions land in `data/community.json` and drop the
+  place everywhere — map, list, search and counts alike. Needs the backend
+  deployed (`terraform -chdir=infra apply`) for the new submission type.
+
 ## [1.0.1] — 2026-08-12
 
 - Raw CloudFront access logs now expire after seven years instead of being kept

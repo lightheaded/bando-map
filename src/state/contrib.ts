@@ -29,16 +29,18 @@ export async function refreshSubmissions(): Promise<void> {
   }
 }
 
-/** A local correction or new place that isn't on the shared map yet. */
+/** A local correction, new place, or proposed deletion not on the shared map yet. */
 export interface LocalChange {
   targetId: number
-  type: 'edit' | 'place'
+  type: 'edit' | 'place' | 'delete'
   name: string
   /** Shared-map values at this moment, for the reviewer's diff. */
   before?: CommunityOverride
   after: CommunityOverride
   /** e.g. "moved pin · name, usage" */
   summary: string
+  /** Per-change context for the reviewer — the reason on a deletion. */
+  note?: string
   /** The rejection a resubmission would supersede, if any. */
   rejected?: Submission
 }
@@ -62,6 +64,22 @@ export function useLocalChanges(): LocalChange[] {
     const changes: LocalChange[] = []
     for (const [idStr, m] of Object.entries(marks)) {
       const id = Number(idStr)
+      if (m.remove) {
+        // A community place the user contributed themselves is skipped by
+        // mergeCommunity in favour of their local copy — look there too.
+        const target = bandos.find((x) => x.id === id) ?? places.find((p) => p.id === id)
+        if (!target) continue
+        changes.push({
+          targetId: id,
+          type: 'delete',
+          name: target.name,
+          before: { name: target.name, lat: Number(target.lat.toFixed(6)), lon: Number(target.lon.toFixed(6)) },
+          after: {},
+          summary: `delete — ${m.remove.reason}`,
+          note: m.remove.reason,
+        })
+        continue // on its way out, so its corrections are moot
+      }
       if (id <= 0 || (!m.fix && !m.edits)) continue
       const b = bandos.find((x) => x.id === id)
       if (!b) continue
@@ -83,6 +101,7 @@ export function useLocalChanges(): LocalChange[] {
       changes.push({ targetId: id, type: 'edit', name: m.edits?.name ?? b.name, before, after, summary: parts.join(' · ') })
     }
     for (const p of places) {
+      if (marks[p.id]?.remove) continue // proposed for deletion, not for adding
       changes.push({
         targetId: p.id,
         type: 'place',
