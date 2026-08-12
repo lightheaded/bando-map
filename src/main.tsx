@@ -8,12 +8,11 @@ import './styles.css'
 registerSW({
   immediate: true,
   // A new version already activated in the background (the next refresh gets
-  // it either way) — instead of the default forced reload, surface a toast
-  // and a persistent Update button so the user reloads when it suits them.
+  // it either way) — instead of the default forced reload, the UpdateBanner
+  // shows (re-showing hourly after a dismissal) so the user reloads when it
+  // suits them.
   onNeedReload() {
-    const update = () => window.location.reload()
-    useAppStore.setState({ updateApp: update })
-    useAppStore.getState().showToast('A new version is available', { label: 'Update', onClick: update })
+    useAppStore.setState({ updateApp: () => window.location.reload() })
   },
   // Installed PWAs can stay open for days — poll for new versions hourly.
   onRegisteredSW(_url, registration) {

@@ -15,17 +15,6 @@ import { DetailContent } from './DetailPanel'
 const PEEK_HEIGHT = 56
 const openHeight = () => Math.round(window.innerHeight * 0.62)
 
-/** Shown only while a new app version is waiting to be activated. */
-function UpdateButton() {
-  const updateApp = useAppStore((s) => s.updateApp)
-  if (!updateApp) return null
-  return (
-    <button className="filter-button update-button" onClick={updateApp} title="A new version is ready — tap to update">
-      Update ↻
-    </button>
-  )
-}
-
 /**
  * The one panel: controls on top, then either the in-view list or the
  * selected place's details. Left dock on desktop, bottom sheet on mobile.
@@ -125,7 +114,6 @@ export function Sidebar() {
       <div className="sidebar-controls">
         <LayerSwitcher />
         <FilterButton />
-        <UpdateButton />
         <button
           className="filter-button sidebar-collapse"
           title="Hide the panel — explore the full map"
