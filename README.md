@@ -108,6 +108,7 @@ Running record — add a row when a month starts, fill Actual from Cost Explorer
 |---|---|---|---|
 | 2026-08 | ~$0.03 | | sync launched + community review shipped mid-month; a few users at most |
 | 2026-09 | ~$0.10 | | first full month with accounts + submissions, assuming ~5 DAU |
+| 2026-10 | ~$0.10 | | |
 
 ## Deployment
 
