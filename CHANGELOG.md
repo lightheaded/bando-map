@@ -7,6 +7,28 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.1.1] — 2026-08-12
+
+- Approved contributions now land on the **next** page load rather than the one
+  after it. `data/community.json` carries decisions, but the service worker
+  served it stale-while-revalidate like the rest of the dataset: the first load
+  after an approval used the copy from before it, and only the second saw the
+  change. It is fetched network-first now, still falling back to the cache when
+  offline. This affected every approval; an approved deletion made it obvious,
+  because the place stayed on the map.
+
+- A place whose deletion has gone live no longer keeps its *deletion proposed*
+  pill. The local mark that was waiting for the decision is cleared when the
+  decision arrives.
+
+- Delete now appears only while Edit is open, instead of sitting in the top bar
+  of every place. Withdrawing a queued deletion lives in the same place — open
+  Edit and the button reads *Undo delete*.
+
+- *Your submissions* rows show what each one asked for: a pin for a place you
+  added, a pencil for a correction, a trash can for a deletion, each with a
+  title on hover. A name and a status could not tell them apart before.
+
 ## [1.1.0] — 2026-08-12
 
 - **Delete a place.** The detail panel's top bar has a red Delete button next to

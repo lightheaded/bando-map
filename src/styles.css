@@ -1165,6 +1165,28 @@ fieldset legend {
   font-size: 13px;
 }
 
+/* What the submission asked for: added, corrected, deleted. */
+.sub-kind {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: #8a8a8a;
+}
+
+.sub-kind svg {
+  width: 13px;
+  height: 13px;
+}
+
+.sub-kind-delete {
+  color: #be123c;
+}
+
+.submission-rows .change-name {
+  flex: 1;
+  min-width: 0;
+}
+
 .sub-status {
   font-size: 12px;
 }

@@ -155,12 +155,15 @@ export const useAppStore = create<AppState>((set) => ({
       thumbsBytes: d.thumbsBytes,
     })),
   setCommunity: (community) => {
-    // A place of the user's own that has been deleted from the shared map is
-    // dead everywhere: drop the local copy too, or mergeCommunity's
-    // local-twin rule would keep showing it to its author alone.
-    const { places, removePlace } = useMarksStore.getState()
+    // A deletion that has gone live settles the local state it came from: a
+    // place of the user's own goes (or mergeCommunity's local-twin rule would
+    // keep showing it to its author alone), and the pending-deletion mark on a
+    // register record clears, so no "deletion proposed" pill outlives the
+    // decision it was asking for.
+    const { places, marks, removePlace, setMark } = useMarksStore.getState()
     for (const id of community?.deleted ?? []) {
       if (places.some((p) => p.id === id)) removePlace(id)
+      else if (marks[id]?.remove) setMark(id, { remove: undefined })
     }
     set((s) => ({ community, bandos: mergeCommunity(s.rawBandos, community) }))
   },

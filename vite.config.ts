@@ -42,6 +42,16 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/pdfs\//, /^\/data\//, /^\/thumbs\//],
         runtimeCaching: [
           {
+            // Approved contributions carry decisions — an approval (or a
+            // deletion) has to land on the next load, not the one after it,
+            // so this one file goes to the network first and falls back to
+            // the cache only when there isn't one. Must precede the /data/
+            // rule below: Workbox takes the first route that matches.
+            urlPattern: ({ url }) => url.pathname === '/data/community.json',
+            handler: 'NetworkFirst',
+            options: { cacheName: 'bando-data', networkTimeoutSeconds: 4, cacheableResponse: { statuses: [200] } },
+          },
+          {
             // Dataset: instant offline load, refreshed in the background.
             urlPattern: ({ url }) => url.pathname.startsWith('/data/'),
             handler: 'StaleWhileRevalidate',

@@ -180,7 +180,17 @@ const DELETE_REASONS = [
  * places of yours that were approved — is queued as a deletion contribution
  * instead, with a reason the reviewer will judge it by.
  */
-function DeleteForm({ item, shared, onClose }: { item: Bando; shared: boolean; onClose: () => void }) {
+function DeleteForm({
+  item,
+  shared,
+  onCancel,
+  onQueued,
+}: {
+  item: Bando
+  shared: boolean
+  onCancel: () => void
+  onQueued: () => void
+}) {
   const setMark = useMarksStore((s) => s.setMark)
   const removePlace = useMarksStore((s) => s.removePlace)
   const showToast = useAppStore((s) => s.showToast)
@@ -197,7 +207,7 @@ function DeleteForm({ item, shared, onClose }: { item: Bando; shared: boolean; o
     }
     setMark(item.id, { remove: { reason: detail.trim() ? `${reason} — ${detail.trim()}` : reason } })
     showToast('Deletion queued — submit it to the shared map from Contribute')
-    onClose()
+    onQueued()
   }
 
   return (
@@ -230,7 +240,7 @@ function DeleteForm({ item, shared, onClose }: { item: Bando; shared: boolean; o
         <button className="btn btn-small btn-danger" onClick={confirm}>
           {shared ? 'Request deletion' : 'Delete place'}
         </button>
-        <button className="btn btn-small" onClick={onClose}>
+        <button className="btn btn-small" onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -249,12 +259,14 @@ export function DetailContent() {
   const mark = useMarksStore((s) => (selectedId != null ? s.marks[selectedId] : undefined))
   const setMark = useMarksStore((s) => s.setMark)
   const [comment, setComment] = useState('')
-  const [editing, setEditing] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  /** Correcting a place is a mode: Delete lives inside it rather than in the
+   *  top bar, where it would sit armed next to every place all the time. */
+  const [mode, setMode] = useState<'view' | 'edit' | 'delete'>('view')
+  const editing = mode === 'edit'
+  const deleting = mode === 'delete'
 
   useEffect(() => {
-    setEditing(false)
-    setDeleting(false)
+    setMode('view')
     setComment(selectedId != null ? (useMarksStore.getState().marks[selectedId]?.comment ?? '') : '')
   }, [selectedId])
 
@@ -296,45 +308,34 @@ export function DetailContent() {
         <button className="btn btn-small back" onClick={() => select(undefined)}>
           ← List
         </button>
-        {mark?.remove ? (
-          <button
-            className="btn btn-small btn-iconed btn-danger btn-active"
-            title="Keep this place on the map after all"
-            onClick={() => {
-              setMark(item.id, { remove: undefined })
-              setDeleting(false)
-              showToast('Deletion withdrawn')
-            }}
-          >
-            <TrashIcon /> Undo delete
-          </button>
-        ) : (
-          <button
-            className={`btn btn-small btn-iconed btn-danger ${deleting ? 'btn-active' : ''}`}
-            title={shared ? 'Ask for this place to be taken off the shared map' : 'Delete this place'}
-            onClick={() => {
-              setDeleting(!deleting)
-              setEditing(false)
-            }}
-          >
-            {deleting ? (
-              'Cancel'
-            ) : (
-              <>
-                <TrashIcon /> Delete
-              </>
-            )}
-          </button>
-        )}
+        {mode !== 'view' &&
+          (mark?.remove ? (
+            <button
+              className="btn btn-small btn-iconed btn-danger btn-active"
+              title="Keep this place on the map after all"
+              onClick={() => {
+                setMark(item.id, { remove: undefined })
+                setMode('edit')
+                showToast('Deletion withdrawn')
+              }}
+            >
+              <TrashIcon /> Undo delete
+            </button>
+          ) : (
+            <button
+              className={`btn btn-small btn-iconed btn-danger ${deleting ? 'btn-active' : ''}`}
+              title={shared ? 'Ask for this place to be taken off the shared map' : 'Delete this place'}
+              onClick={() => setMode(deleting ? 'edit' : 'delete')}
+            >
+              <TrashIcon /> Delete
+            </button>
+          ))}
         <button
-          className={`btn btn-small btn-iconed ${editing ? 'btn-active' : ''}`}
+          className={`btn btn-small btn-iconed ${mode !== 'view' ? 'btn-active' : ''}`}
           title="Correct this place's information"
-          onClick={() => {
-            setEditing(!editing)
-            setDeleting(false)
-          }}
+          onClick={() => setMode(mode === 'view' ? 'edit' : 'view')}
         >
-          {editing ? (
+          {mode !== 'view' ? (
             'Cancel'
           ) : (
             <>
@@ -354,9 +355,9 @@ export function DetailContent() {
         </button>
       </div>
       {deleting ? (
-        <DeleteForm item={item} shared={shared} onClose={() => setDeleting(false)} />
+        <DeleteForm item={item} shared={shared} onCancel={() => setMode('edit')} onQueued={() => setMode('view')} />
       ) : editing ? (
-        <EditForm raw={raw!} item={item} onClose={() => setEditing(false)} />
+        <EditForm raw={raw!} item={item} onClose={() => setMode('view')} />
       ) : (
         <>
           <h2>{item.name}</h2>
@@ -381,7 +382,7 @@ export function DetailContent() {
             {mark?.fix && <span className="chip">📌 moved</span>}
             {mark?.edits && <span className="chip">✏️ edited</span>}
             {mark?.remove && (
-              <span className="chip chip-bad" title={`Deletion proposed: ${mark.remove.reason}`}>
+              <span className="chip chip-bad" title={`Deletion proposed: ${mark.remove.reason} — open Edit to withdraw it`}>
                 🗑️ deletion proposed
               </span>
             )}
