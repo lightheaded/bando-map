@@ -293,7 +293,7 @@ variable "budget_limit_usd" {
 # Billing → Cost allocation tags.
 variable "activate_cost_allocation_tags" {
   type    = bool
-  default = true
+  default = false
 }
 
 resource "aws_ce_cost_allocation_tag" "keys" {
