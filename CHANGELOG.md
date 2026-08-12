@@ -7,7 +7,7 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
-## [Unreleased]
+## [1.1.0] — 2026-08-12
 
 - **Delete a place.** The detail panel's top bar has a red Delete button next to
   Edit and Move. Deleting your own place — one you added and haven't contributed
