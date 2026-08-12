@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAppStore } from '../state/store'
 import { useAdminStore, refreshAdminOverview } from '../state/admin'
-import { decideSubmission } from '../sync/api'
+import { decideSubmission, type VisitDay } from '../sync/api'
 import { en, type Submission } from '../types'
 import { age } from './ContributePanel'
 import { ShieldIcon } from './icons'
@@ -64,6 +64,127 @@ function DiffRows({ s }: { s: Submission }) {
     )
   }
   return <ul className="diff-rows">{rows}</ul>
+}
+
+/** Descending count list, top n, as "EE 12 · FI 3". */
+const topCountries = (counts: Record<string, number>, n = 6) =>
+  Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([cc, count]) => `${cc} ${count}`)
+    .join(' · ')
+
+const sumCountries = (days: VisitDay[], pick: (d: VisitDay) => Record<string, number>) => {
+  const total: Record<string, number> = {}
+  for (const day of days) for (const [cc, n] of Object.entries(pick(day))) total[cc] = (total[cc] ?? 0) + n
+  return total
+}
+
+/**
+ * Daily traffic from the CloudFront access-log rollup. Human and crawler page
+ * views are shown side by side rather than netted off: the split is a user-agent
+ * guess, so the country breakdown behind each day is what makes it judgeable.
+ */
+function VisitsCard({ visits }: { visits: VisitDay[] }) {
+  const [openDay, setOpenDay] = useState<string>()
+  const window30 = visits.slice(0, 30)
+  const views = window30.reduce((n, d) => n + d.views, 0)
+  const botViews = window30.reduce((n, d) => n + d.botViews, 0)
+  // Daily distinct IPs don't add up to a 30-day unique count (the same person
+  // returning counts once per day), so report the daily average instead.
+  const perDay = window30.length
+    ? Math.round(window30.reduce((n, d) => n + d.visitors, 0) / window30.length)
+    : 0
+  const botShare = views + botViews > 0 ? Math.round((botViews / (views + botViews)) * 100) : 0
+  // Bars are relative to the busiest day in view, humans and bots stacked.
+  const peak = Math.max(1, ...window30.map((d) => d.views + d.botViews))
+  const humanCountries = sumCountries(window30, (d) => d.countries)
+  const botCountries = sumCountries(window30, (d) => d.botCountries)
+
+  return (
+    <details className="offline-card">
+      <summary>
+        <strong>Visits</strong>{' '}
+        <span className="offline-sub">
+          {views} views · ~{perDay} visitors/day · {botShare}% bot in 30 d
+        </span>
+      </summary>
+
+      {visits.length === 0 ? (
+        <p className="offline-sub">
+          No rollup yet — logs are delivered within the hour and folded up every few hours.
+        </p>
+      ) : (
+        <>
+          <div className="admin-stats stat-totals">
+            <div>
+              <b>{views}</b>
+              <span>views 30 d</span>
+            </div>
+            <div>
+              <b>{perDay}</b>
+              <span>visitors / day</span>
+            </div>
+            <div>
+              <b>{botViews}</b>
+              <span>bot views</span>
+            </div>
+            <div>
+              <b>{visits[0]?.views ?? 0}</b>
+              <span>today</span>
+            </div>
+          </div>
+          <p className="offline-sub stat-cc">
+            Countries: {topCountries(humanCountries) || '—'}
+          </p>
+          {Object.keys(botCountries).length > 0 && (
+            <p className="offline-sub stat-cc bot">Bots: {topCountries(botCountries)}</p>
+          )}
+
+          <ul className="submission-rows stat-rows">
+            {window30.map((d) => (
+              <li key={d.date} className={openDay === d.date ? 'open' : undefined}>
+                <button
+                  className="stat-row"
+                  onClick={() => setOpenDay(openDay === d.date ? undefined : d.date)}
+                  aria-expanded={openDay === d.date}
+                >
+                  <span className="stat-day">{d.date.slice(5)}</span>
+                  <span className="stat-bar" aria-hidden="true">
+                    <i className="human" style={{ width: `${(d.views / peak) * 100}%` }} />
+                    <i className="bot" style={{ width: `${(d.botViews / peak) * 100}%` }} />
+                  </span>
+                  <span className="stat-count">
+                    <b>{d.views}</b>
+                    <span className="offline-sub">
+                      {d.visitors} vis · {d.botViews} bot
+                    </span>
+                  </span>
+                </button>
+                {openDay === d.date && (
+                  <div className="stat-detail">
+                    <p className="offline-sub">
+                      Countries: {topCountries(d.countries, 10) || '—'}
+                    </p>
+                    {Object.keys(d.botCountries).length > 0 && (
+                      <p className="offline-sub bot">Bots: {topCountries(d.botCountries, 10)}</p>
+                    )}
+                    <p className="offline-sub">
+                      {d.other} other requests · rolled up {d.updatedAt ? `${age(d.updatedAt)} ago` : 'never'}
+                    </p>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="offline-sub stat-note">
+            Page loads only, counted at the edge. Repeat visits served from the offline cache never reach
+            CloudFront, and the human/bot split is a user-agent guess.
+          </p>
+        </>
+      )}
+    </details>
+  )
 }
 
 const ageClass = (iso: string) => {
@@ -248,6 +369,8 @@ export function AdminPanel() {
           <p className="offline-sub">Queue is empty — nothing waiting for review.</p>
         </div>
       )}
+
+      {overview && <VisitsCard visits={overview.visits ?? []} />}
 
       {decided.length > 0 && (
         <details className="offline-card">
