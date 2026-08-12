@@ -15,9 +15,9 @@
  */
 import { mkdir, writeFile, readFile, access, stat } from 'node:fs/promises'
 import { searchArchitecture, USAGE, CONDITION, type ArchitectureRow } from './muinas.ts'
-import { geocode, type GeocodeResult } from './geocode.ts'
+import { geocode, geocodeCadastral, type GeocodeResult } from './geocode.ts'
 import { ensureThumb } from './thumbs.ts'
-import { pdfCoords } from './pdfs.ts'
+import { pdfSignals } from './pdfs.ts'
 import { cachedJson } from './cache.ts'
 import type { Bando, BandoDataset } from '../../src/types.ts'
 
@@ -82,17 +82,58 @@ async function main() {
   const failures: string[] = []
   const overrides = await readOverrides()
 
-  let fromPdf = 0
+  // Location ladder per record: coordinates printed in the register PDF, then
+  // the PDF's katastritunnus resolved via In-ADS, then the best-precision
+  // geocode of the PDF's street-level address vs the catalog address.
+  const PRECISION_RANK = { building: 0, street: 1, village: 2 } as const
+  const sourceCounts: Record<string, number> = {}
   for (const rec of candidates) {
-    const geo = geocoded.get(rec.id)
-    // The register PDF carries exact L-EST97 coordinates — prefer it over geocoding.
-    const pdf = await pdfCoords(rec.id)
-    if (!geo && !pdf) {
+    const signals = await pdfSignals(rec.id)
+    let coords: Pick<Bando, 'lat' | 'lon' | 'lestX' | 'lestY'> | undefined
+    let provenance: Bando['geocode'] | undefined
+    let source: string
+    if (signals?.coords) {
+      coords = signals.coords
+      provenance = 'register'
+      source = 'pdf-coords'
+    }
+    if (!coords && signals?.cadastral) {
+      const kt = await cachedJson<GeocodeResult | null>(`geocode-kt/${rec.id}`, async () => {
+        return (await geocodeCadastral(signals.cadastral!, rec.county)) ?? null
+      })
+      if (kt) {
+        coords = kt
+        provenance = kt.precision
+        source = 'pdf-cadastral'
+      }
+    }
+    if (!coords) {
+      const fromPdfAddr = signals?.address
+        ? await cachedJson<GeocodeResult | null>(`geocode-pdfaddr/${rec.id}`, async () => {
+            return (await geocode(signals.address!, rec.municipality, rec.county)) ?? null
+          })
+        : null
+      const fromCatalog = geocoded.get(rec.id) ?? null
+      // The PDF address must strictly beat the catalog geocode: extraction can
+      // truncate it to the bare village, which In-ADS happily fuzzy-matches to
+      // a same-named farm parcel at "building" precision somewhere else.
+      const geo =
+        fromPdfAddr && (!fromCatalog || PRECISION_RANK[fromPdfAddr.precision] < PRECISION_RANK[fromCatalog.precision])
+          ? { hit: fromPdfAddr, source: 'pdf-address' }
+          : fromCatalog
+            ? { hit: fromCatalog, source: 'catalog-address' }
+            : null
+      if (geo) {
+        coords = geo.hit
+        provenance = geo.hit.precision
+        source = geo.source
+      }
+    }
+    if (!coords) {
       failures.push(`${rec.id} ${rec.name} — ${rec.address}, ${rec.municipality}`)
       continue
     }
-    if (pdf) fromPdf++
-    const coords = pdf ?? geo!
+    sourceCounts[source!] = (sourceCounts[source!] ?? 0) + 1
     const bando: Bando = {
       id: rec.id,
       name: rec.name,
@@ -106,7 +147,7 @@ async function main() {
       lon: coords.lon,
       lestX: coords.lestX,
       lestY: coords.lestY,
-      geocode: pdf ? 'register' : geo!.precision,
+      geocode: provenance!,
       photos: rec.photos,
     }
     const override = overrides[rec.id]
@@ -153,7 +194,8 @@ async function main() {
   await writeFile('data/catalog.json', JSON.stringify({ scrapedAt: dataset.scrapedAt, records: catalog }, null, 1))
 
   console.log(`\nWrote public/data/bandos.json: ${bandos.length} bandos`)
-  console.log(`Geocode precision (In-ADS):`, precisionCounts, `— ${fromPdf} upgraded to exact register-PDF coordinates`)
+  console.log(`Geocode precision (In-ADS):`, precisionCounts)
+  console.log(`Coordinate source:`, sourceCounts)
   console.log(`Full catalog in data/catalog.json: ${catalog.length} records`)
   if (failures.length) {
     console.log(`\n${failures.length} candidates could not be geocoded (add to data/overrides.json):`)
