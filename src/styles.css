@@ -480,21 +480,6 @@ fieldset legend {
   margin-right: auto;
 }
 
-.move-btn,
-.toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* The checkbox is display-only (the button is the control) and inherits the
-   button's state color. */
-.toggle-btn input {
-  pointer-events: none;
-  margin: 0;
-  accent-color: currentColor;
-}
-
 /* ============ Edit form ============ */
 .edit-form {
   display: flex;
@@ -687,6 +672,18 @@ fieldset legend {
   font-size: 12px;
 }
 
+/* A leading stroke icon inside a button, centered against the label. */
+.btn-iconed {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-iconed svg {
+  width: 13px;
+  height: 13px;
+}
+
 .btn-primary {
   background: #e11d48;
   border-color: #e11d48;
@@ -698,16 +695,10 @@ fieldset legend {
   border-color: #be123c;
 }
 
-.btn-success,
-.btn-visited {
+.btn-success {
   background: #dcfce7;
   border-color: #86efac;
   color: #15803d;
-}
-
-.btn-visited:hover {
-  background: #bbf7d0;
-  border-color: #4ade80;
 }
 
 .btn-success:hover {
@@ -715,25 +706,94 @@ fieldset legend {
   border-color: #86efac;
 }
 
-.btn-shortlisted {
-  background: #dbeafe;
-  border-color: #93c5fd;
-  color: #1d4ed8;
-}
-
-.btn-shortlisted:hover {
-  background: #bfdbfe;
-  border-color: #60a5fa;
-}
-
-.btn-rejected {
+/* A tool that's currently engaged (Cancel, picking a spot on the map). */
+.btn-active {
   background: #e4e4e7;
   border-color: #a1a1aa;
   color: #3f3f46;
 }
 
-.btn-rejected:hover {
+.btn-active:hover {
   background: #d4d4d8;
+  border-color: #a1a1aa;
+}
+
+/* Triage toggles: colored outline when off, subtle matching fill when on.
+   Hover rules repeat the border so .btn:hover's gray doesn't take over. */
+.toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.toggle-check {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggle-check svg {
+  width: 10px;
+  height: 10px;
+  visibility: hidden;
+}
+
+.toggle-btn[aria-pressed='true'] .toggle-check {
+  background: currentColor;
+}
+
+.toggle-btn[aria-pressed='true'] .toggle-check svg {
+  visibility: visible;
+}
+
+.toggle-shortlisted {
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.toggle-shortlisted:hover {
+  background: #eff6ff;
+  border-color: #60a5fa;
+}
+
+.toggle-shortlisted[aria-pressed='true'] {
+  background: #dbeafe;
+  border-color: #60a5fa;
+}
+
+.toggle-rejected {
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.toggle-rejected:hover {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+.toggle-rejected[aria-pressed='true'] {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+.toggle-visited {
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.toggle-visited:hover {
+  background: #f0fdf4;
+  border-color: #4ade80;
+}
+
+.toggle-visited[aria-pressed='true'] {
+  background: #dcfce7;
+  border-color: #4ade80;
 }
 
 .btn-muted {
