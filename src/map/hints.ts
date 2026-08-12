@@ -8,7 +8,15 @@
 import maplibregl from 'maplibre-gl'
 import type { FeatureCollection } from 'geojson'
 import { wgs84ToLest97 } from '../geo/lest97'
-import { ESAP_THUMB_URL, GMAPS_URL, XGIS_URL, type HintLayerDataset, type HintSourceId, type HintSpot } from '../types'
+import {
+  ESAP_THUMB_URL,
+  GMAPS_URL,
+  HINT_SOURCES,
+  XGIS_URL,
+  type HintLayerDataset,
+  type HintSourceId,
+  type HintSpot,
+} from '../types'
 
 export const HINT_STYLE: Record<HintSourceId, { label: string; color: string; attribution: string }> = {
   etak: { label: 'ETAK ruins', color: '#eab308', attribution: 'ETAK: <a href="https://geoportaal.maaruum.ee/" target="_blank">Maa- ja Ruumiamet</a>' },
@@ -50,8 +58,13 @@ export function etakFilter(minM2: number, minDwell: number): maplibregl.FilterSp
   return parts.length ? (['all', ...parts] as unknown as maplibregl.FilterSpecification) : null
 }
 
+/**
+ * Layers are added in HINT_SOURCES order, each one under `beforeId` — so the
+ * last source ends up drawn on top. Click resolution (topHintHit) reads the
+ * stack back off that same order.
+ */
 export function addHintLayers(map: maplibregl.Map, beforeId: string) {
-  for (const id of Object.keys(HINT_STYLE) as HintSourceId[]) {
+  for (const id of HINT_SOURCES) {
     map.addSource(hintLayerId(id), {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] },

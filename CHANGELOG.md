@@ -7,6 +7,15 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.2.1] — 2026-08-12
+
+- **One popup per click.** Clicking a hint dot that sat inside an airspace zone
+  opened both the dot's popup and the zone's; two hint dots on the same building
+  — an ETAK ruin and its OSM twin — opened one popup each. A click now resolves
+  to a single target, the topmost one under the cursor: cluster, then hint dot,
+  then zone. The airspace popup answers only where nothing is drawn over it,
+  which is what it is for — asking about the bare map.
+
 ## [1.2.0] — 2026-08-12
 
 - **Drone airspace on the map.** Estonia's official UAS geographical zones — the
