@@ -55,6 +55,15 @@ export const EditIcon = () => (
   </svg>
 )
 
+export const TrashIcon = () => (
+  <svg {...props}>
+    <path d="M3 6h18" />
+    <path d="M8 6V4h8v2" />
+    <path d="M6 6l1 14h10l1-14" />
+    <path d="M10 11v5M14 11v5" />
+  </svg>
+)
+
 export const ShieldIcon = () => (
   <svg {...props}>
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />

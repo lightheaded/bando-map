@@ -35,7 +35,16 @@ function distanceMeters(a: { lat: number; lon: number }, b: { lat: number; lon: 
 function DiffRows({ s }: { s: Submission }) {
   const { before, after, note, type } = s.data
   const rows: ReactNode[] = []
-  if (after.lat != null && after.lon != null) {
+  if (type === 'delete') {
+    rows.push(
+      <li key="delete">
+        <span className="diff-field">remove</span>
+        <s>{before?.name ?? s.data.name}</s>
+        {before?.lat != null && before?.lon != null && ` · ${before.lat.toFixed(5)}, ${before.lon.toFixed(5)}`}
+      </li>,
+    )
+  }
+  if (type !== 'delete' && after.lat != null && after.lon != null) {
     const moved = before?.lat != null && before?.lon != null
     rows.push(
       <li key="pin">
@@ -259,17 +268,19 @@ export function AdminPanel() {
       return
     }
     const target = useAppStore.getState().bandos.find((b) => b.id === s.data.targetId)
+    const at = s.data.before?.lat != null && s.data.before?.lon != null ? s.data.before : undefined
     const after =
       s.data.after.lat != null && s.data.after.lon != null
         ? ([s.data.after.lon, s.data.after.lat] as [number, number])
         : target
           ? ([target.lon, target.lat] as [number, number])
-          : undefined
+          : // A deletion proposes no position — show where the doomed place is.
+            at
+            ? ([at.lon!, at.lat!] as [number, number])
+            : undefined
     if (!after) return
-    const before =
-      s.data.before?.lat != null && s.data.before?.lon != null
-        ? ([s.data.before.lon, s.data.before.lat] as [number, number])
-        : undefined
+    // Only a move has a meaningful "from"; a deletion's before is the same point.
+    const before = s.data.type !== 'delete' && at ? ([at.lon!, at.lat!] as [number, number]) : undefined
     setDiffFor(s.id)
     setReviewDiff({ before, after })
   }
@@ -313,14 +324,14 @@ export function AdminPanel() {
       </div>
 
       {pending.map((s) => (
-        <div className="offline-card queue-card" key={s.id}>
+        <div className={`offline-card queue-card${s.data.type === 'delete' ? ' queue-delete' : ''}`} key={s.id}>
           <div className="offline-card-head">
             <strong>{s.data.name}</strong>
             <span className={`age-chip ${ageClass(s.createdAt)}`}>{age(s.createdAt)}</span>
           </div>
           <p className="offline-sub">
-            {s.data.type === 'place' ? 'new place' : 'correction'} · {s.email} · {acceptedBy.get(s.email ?? '') ?? 0}{' '}
-            accepted
+            {s.data.type === 'place' ? 'new place' : s.data.type === 'delete' ? 'deletion' : 'correction'} · {s.email} ·{' '}
+            {acceptedBy.get(s.email ?? '') ?? 0} accepted
           </p>
           <DiffRows s={s} />
           <div className="offline-actions queue-actions">

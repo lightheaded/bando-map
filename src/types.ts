@@ -114,6 +114,12 @@ export interface UserMark {
    * data/overrides.json.
    */
   edits?: BandoEdits
+  /**
+   * A proposed removal from the shared map (the "Delete" tool) — the pin stays
+   * visible, tagged, until an admin approves it. Local-only places never get
+   * one: they are deleted outright.
+   */
+  remove?: { reason: string }
   updatedAt: string
 }
 
@@ -170,15 +176,20 @@ export interface Submission {
 }
 
 export interface SubmissionData {
-  /** 'edit' corrects a register record; 'place' proposes a new spot. */
-  type: 'edit' | 'place'
+  /**
+   * 'edit' corrects a register record; 'place' proposes a new spot; 'delete'
+   * asks for one to be taken off the shared map altogether.
+   */
+  type: 'edit' | 'place' | 'delete'
   /** Register id for edits; the (negative) local place id for places. */
   targetId: number
   /** Display name for queues and history. */
   name: string
   /** Register values at submission time, for the reviewer's diff. */
   before?: CommunityOverride
+  /** Empty on a deletion — nothing is being proposed, only removal. */
   after: CommunityOverride
+  /** Free-text context for the reviewer; carries the reason on a deletion. */
   note?: string
 }
 
@@ -188,6 +199,11 @@ export interface CommunityData {
   publishedAt: string
   overrides: Record<number, CommunityOverride>
   places: { id: number; name: string; lat: number; lon: number }[]
+  /**
+   * Ids taken off the shared map by an approved deletion — register records and
+   * community places alike. Every client drops them entirely.
+   */
+  deleted?: number[]
 }
 
 export const USAGE_VALUES = ['ei kasutata', 'elumaja', 'kasutusel', 'koolimaja', 'sakraalhoone', 'tuletorn'] as const

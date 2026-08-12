@@ -471,11 +471,12 @@ fieldset legend {
 
 .detail-topbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 8px;
 }
 
-/* List stays left; the correction tools (Edit, Move) group on the right. */
+/* List stays left; the place tools (Delete, Edit, Move) group on the right. */
 .detail-topbar .back {
   margin-right: auto;
 }
@@ -1394,6 +1395,30 @@ fieldset legend {
 .btn-danger:hover {
   background: #fff1f2;
   border-color: #fb7185;
+}
+
+/* Delete armed, or a deletion already queued — filled rather than outlined. */
+.btn-danger.btn-active,
+.btn-danger.btn-active:hover {
+  background: #ffe4e6;
+  border-color: #fb7185;
+  color: #be123c;
+}
+
+/* The delete confirmation, in place of the detail body. */
+.delete-form h2 {
+  font-size: 16px;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.delete-form .offline-sub {
+  margin: 0;
+}
+
+/* A deletion in the review queue reads as destructive at a glance. */
+.queue-delete {
+  border-left: 3px solid #fb7185;
 }
 
 .reject-form {

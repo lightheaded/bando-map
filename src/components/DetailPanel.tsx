@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
-import { EditIcon, MapPinIcon } from './icons'
+import { EditIcon, MapPinIcon, TrashIcon } from './icons'
 import { placeToBando, resolveBando } from '../state/filters'
 import { wgs84ToLest97 } from '../geo/lest97'
 import {
@@ -165,6 +165,79 @@ function EditForm({ raw, item, onClose }: { raw: Bando; item: Bando; onClose: ()
   )
 }
 
+const DELETE_REASONS = [
+  'demolished',
+  'nothing there',
+  'duplicate',
+  'not abandoned',
+  "shouldn't be listed",
+  'other',
+] as const
+
+/**
+ * Takes a place off the map. A place that only exists on this device goes
+ * immediately; anything on the shared map — register records, community spots,
+ * places of yours that were approved — is queued as a deletion contribution
+ * instead, with a reason the reviewer will judge it by.
+ */
+function DeleteForm({ item, shared, onClose }: { item: Bando; shared: boolean; onClose: () => void }) {
+  const setMark = useMarksStore((s) => s.setMark)
+  const removePlace = useMarksStore((s) => s.removePlace)
+  const showToast = useAppStore((s) => s.showToast)
+  const select = useAppStore((s) => s.select)
+  const [reason, setReason] = useState<string>(DELETE_REASONS[0])
+  const [detail, setDetail] = useState('')
+
+  const confirm = () => {
+    if (!shared) {
+      removePlace(item.id)
+      select(undefined)
+      showToast('Place deleted')
+      return
+    }
+    setMark(item.id, { remove: { reason: detail.trim() ? `${reason} — ${detail.trim()}` : reason } })
+    showToast('Deletion queued — submit it to the shared map from Contribute')
+    onClose()
+  }
+
+  return (
+    <div className="edit-form delete-form">
+      <h2>{item.name}</h2>
+      {shared ? (
+        <>
+          <p className="offline-sub">
+            Asks for this place to be taken off everyone's map. It stays on yours, tagged, until an admin approves.
+          </p>
+          <label>
+            Reason
+            <select value={reason} onChange={(e) => setReason(e.target.value)}>
+              {DELETE_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Details — optional, the reviewer sees this
+            <input value={detail} maxLength={300} onChange={(e) => setDetail(e.target.value)} />
+          </label>
+        </>
+      ) : (
+        <p className="offline-sub">This place is only on this device — deleting it needs no review, and can't be undone.</p>
+      )}
+      <div className="filter-actions">
+        <button className="btn btn-small btn-danger" onClick={confirm}>
+          {shared ? 'Request deletion' : 'Delete place'}
+        </button>
+        <button className="btn btn-small" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function DetailContent() {
   const selectedId = useAppStore((s) => s.selectedId)
   const bando = useAppStore((s) => s.bandos.find((b) => b.id === s.selectedId))
@@ -172,14 +245,16 @@ export function DetailContent() {
   const select = useAppStore((s) => s.select)
   const showToast = useAppStore((s) => s.showToast)
   const statusFilter = useAppStore((s) => s.filters.status)
+  const communityPlaces = useAppStore((s) => s.community?.places)
   const mark = useMarksStore((s) => (selectedId != null ? s.marks[selectedId] : undefined))
   const setMark = useMarksStore((s) => s.setMark)
-  const removePlace = useMarksStore((s) => s.removePlace)
   const [comment, setComment] = useState('')
   const [editing, setEditing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     setEditing(false)
+    setDeleting(false)
     setComment(selectedId != null ? (useMarksStore.getState().marks[selectedId]?.comment ?? '') : '')
   }, [selectedId])
 
@@ -188,6 +263,10 @@ export function DetailContent() {
   if (selectedId == null || !item) return null
 
   const status = mark?.status
+  // A custom place of the user's own is theirs to delete outright — unless it
+  // was approved onto the shared map, where removing it needs review like any
+  // register record or community spot.
+  const shared = !item.custom || !!communityPlaces?.some((p) => p.id === item.id)
   const coords = `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`
   // Moved pins and custom places have no (fresh) dataset L-EST97 coordinates —
   // project them from WGS84 so the XGIS link always works.
@@ -217,10 +296,43 @@ export function DetailContent() {
         <button className="btn btn-small back" onClick={() => select(undefined)}>
           ← List
         </button>
+        {mark?.remove ? (
+          <button
+            className="btn btn-small btn-iconed btn-danger btn-active"
+            title="Keep this place on the map after all"
+            onClick={() => {
+              setMark(item.id, { remove: undefined })
+              setDeleting(false)
+              showToast('Deletion withdrawn')
+            }}
+          >
+            <TrashIcon /> Undo delete
+          </button>
+        ) : (
+          <button
+            className={`btn btn-small btn-iconed btn-danger ${deleting ? 'btn-active' : ''}`}
+            title={shared ? 'Ask for this place to be taken off the shared map' : 'Delete this place'}
+            onClick={() => {
+              setDeleting(!deleting)
+              setEditing(false)
+            }}
+          >
+            {deleting ? (
+              'Cancel'
+            ) : (
+              <>
+                <TrashIcon /> Delete
+              </>
+            )}
+          </button>
+        )}
         <button
           className={`btn btn-small btn-iconed ${editing ? 'btn-active' : ''}`}
           title="Correct this place's information"
-          onClick={() => setEditing(!editing)}
+          onClick={() => {
+            setEditing(!editing)
+            setDeleting(false)
+          }}
         >
           {editing ? (
             'Cancel'
@@ -241,7 +353,9 @@ export function DetailContent() {
           <MapPinIcon /> Move
         </button>
       </div>
-      {editing ? (
+      {deleting ? (
+        <DeleteForm item={item} shared={shared} onClose={() => setDeleting(false)} />
+      ) : editing ? (
         <EditForm raw={raw!} item={item} onClose={() => setEditing(false)} />
       ) : (
         <>
@@ -266,6 +380,11 @@ export function DetailContent() {
             {item.community && <span className="chip">🌍 community</span>}
             {mark?.fix && <span className="chip">📌 moved</span>}
             {mark?.edits && <span className="chip">✏️ edited</span>}
+            {mark?.remove && (
+              <span className="chip chip-bad" title={`Deletion proposed: ${mark.remove.reason}`}>
+                🗑️ deletion proposed
+              </span>
+            )}
           </div>
         </>
       )}
@@ -346,18 +465,6 @@ export function DetailContent() {
             </button>
           ))}
         </span>
-        {item.custom && (
-          <button
-            className="btn btn-small btn-muted"
-            onClick={() => {
-              removePlace(item.id)
-              select(undefined)
-              showToast('Place deleted')
-            }}
-          >
-            Delete place
-          </button>
-        )}
       </div>
       <textarea
         className="comment"

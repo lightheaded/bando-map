@@ -103,7 +103,8 @@ export function ContributePanel() {
           name: c.name,
           before: c.before,
           after: c.after,
-          note: note.trim() || undefined,
+          // A deletion carries its own reason; the panel's note adds to it.
+          note: [c.note, note.trim()].filter(Boolean).join(' — ') || undefined,
         })
         sent++
       }

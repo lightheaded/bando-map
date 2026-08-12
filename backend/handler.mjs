@@ -12,7 +12,9 @@
  * code runs; admin routes additionally require the token to carry the
  * ADMIN_GROUP Cognito group. Approving a submission rebuilds data/community.json from all
  * approved submissions and publishes it to the site bucket + invalidates the
- * CloudFront path, so decisions reach every client without a rescrape.
+ * CloudFront path, so decisions reach every client without a rescrape. A
+ * submission adds a place, corrects one, or deletes one — an approved deletion
+ * lands in the file's `deleted` list and every client drops that id.
  *
  * Storage: the sync table doubles as the submission store and the visit-stats
  * store — sync documents live at pk=<cognito sub>, submissions at pk=sub#<uuid>,
@@ -94,11 +96,17 @@ async function allSubmissions(filter) {
 /** null when valid, else a human-readable problem. */
 function validateSubmission(data) {
   if (typeof data !== 'object' || data === null) return 'not an object'
-  if (data.type !== 'edit' && data.type !== 'place') return 'unknown type'
+  if (!['edit', 'place', 'delete'].includes(data.type)) return 'unknown type'
   if (!Number.isFinite(data.targetId)) return 'bad targetId'
   if (typeof data.name !== 'string' || !data.name.trim() || data.name.length > 250) return 'bad name'
   if (data.note != null && (typeof data.note !== 'string' || data.note.length > 1000)) return 'bad note'
   const after = data.after
+  // A deletion proposes no values — only a reason, which the reviewer judges it by.
+  if (data.type === 'delete') {
+    if (after != null && (typeof after !== 'object' || Object.keys(after).length)) return 'a deletion proposes no values'
+    if (typeof data.note !== 'string' || !data.note.trim()) return 'a deletion needs a reason'
+    return null
+  }
   if (typeof after !== 'object' || after === null || !Object.keys(after).length) return 'empty change'
   for (const [key, value] of Object.entries(after)) {
     if (!OVERRIDE_FIELDS.includes(key)) return `unknown field ${key}`
@@ -168,12 +176,24 @@ async function republishCommunity() {
   )
   const overrides = {}
   const places = new Map()
+  const deleted = new Set()
   for (const s of approved) {
+    const id = s.data.targetId
+    if (s.data.type === 'delete') {
+      // Off the map, and its accumulated corrections go with it.
+      deleted.add(id)
+      places.delete(id)
+      delete overrides[id]
+      continue
+    }
+    // Approving anything else on the same target puts it back — decisions
+    // apply in the order they were made, latest wins.
+    deleted.delete(id)
     if (s.data.type === 'place') {
       const { name, lat, lon } = s.data.after
-      places.set(s.data.targetId, { id: s.data.targetId, name, lat, lon })
+      places.set(id, { id, name, lat, lon })
     } else {
-      overrides[s.data.targetId] = { ...overrides[s.data.targetId], ...s.data.after }
+      overrides[id] = { ...overrides[id], ...s.data.after }
     }
   }
   const body = JSON.stringify({
@@ -181,6 +201,7 @@ async function republishCommunity() {
     publishedAt: new Date().toISOString(),
     overrides,
     places: [...places.values()],
+    deleted: [...deleted],
   })
   await s3.send(
     new PutObjectCommand({

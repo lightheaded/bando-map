@@ -13,7 +13,9 @@ export type SidebarPanel = 'filters' | 'offline' | 'storage' | 'sync' | 'contrib
  */
 function mergeCommunity(raw: Bando[], c?: CommunityData): Bando[] {
   if (!c) return raw
-  const merged = raw.map((b) => {
+  // Approved deletions drop out entirely — map, list, search and counts alike.
+  const deleted = new Set(c.deleted ?? [])
+  const merged = raw.filter((b) => !deleted.has(b.id)).map((b) => {
     const o = c.overrides[b.id]
     if (!o) return b
     const { lat, lon, ...fields } = o
@@ -32,7 +34,7 @@ function mergeCommunity(raw: Bando[], c?: CommunityData): Bando[] {
   // community twin so they don't get a double pin.
   const localIds = new Set(useMarksStore.getState().places.map((p) => p.id))
   for (const p of c.places) {
-    if (localIds.has(p.id)) continue
+    if (localIds.has(p.id) || deleted.has(p.id)) continue
     merged.push({
       id: p.id,
       name: p.name,
@@ -152,7 +154,16 @@ export const useAppStore = create<AppState>((set) => ({
       scrapedAt: d.scrapedAt,
       thumbsBytes: d.thumbsBytes,
     })),
-  setCommunity: (community) => set((s) => ({ community, bandos: mergeCommunity(s.rawBandos, community) })),
+  setCommunity: (community) => {
+    // A place of the user's own that has been deleted from the shared map is
+    // dead everywhere: drop the local copy too, or mergeCommunity's
+    // local-twin rule would keep showing it to its author alone.
+    const { places, removePlace } = useMarksStore.getState()
+    for (const id of community?.deleted ?? []) {
+      if (places.some((p) => p.id === id)) removePlace(id)
+    }
+    set((s) => ({ community, bandos: mergeCommunity(s.rawBandos, community) }))
+  },
   // Selecting a place also expands the mobile sheet, so the detail card shows.
   select: (id) => set((s) => ({ selectedId: id, sheetOpen: id != null ? true : s.sheetOpen })),
   setBaseLayer: (l) => {
