@@ -32,6 +32,19 @@ if ('serviceWorker' in navigator) {
   else navigator.serviceWorker.addEventListener('controllerchange', warmUp, { once: true })
 }
 
+// Scrolling with the pointer over a focused number input edits its value
+// instead of scrolling the page — easy to do by accident on a trackpad, and
+// silent when it happens. Blurring on wheel gives the scroll back to the page
+// and leaves the value alone. Passive: we never cancel the scroll itself.
+document.addEventListener(
+  'wheel',
+  (e) => {
+    const el = e.target
+    if (el instanceof HTMLInputElement && el.type === 'number' && el === document.activeElement) el.blur()
+  },
+  { passive: true },
+)
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

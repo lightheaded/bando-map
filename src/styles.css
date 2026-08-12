@@ -205,11 +205,29 @@ body,
 }
 
 /* ============ Controls ============ */
+/*
+ * Base-map choice, on the map beside the zoom buttons. MapLibre's own controls
+ * sit at 10px from the top-right and are 29px wide, so this parks immediately
+ * to their left and shares their shadow language.
+ */
 .layer-switcher {
+  position: absolute;
+  top: 10px;
+  right: 49px;
+  z-index: 2;
   display: flex;
-  background: #f4f4f5;
+  background: #fff;
   border-radius: 9px;
   overflow: hidden;
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 10%);
+}
+
+@media (max-width: 640px) {
+  /* Narrow phones: shorten the labels rather than let them meet the controls. */
+  .layer-switcher button {
+    padding: 7px 8px;
+    font-size: 12px;
+  }
 }
 
 .layer-switcher button {
@@ -1580,4 +1598,260 @@ details.offline-card summary {
   margin-top: 4px;
   font-size: 11px;
   color: #6b7280;
+}
+
+/* ---------- Airspace zones (Layers panel + map popup) ---------- */
+
+.map-layers-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+}
+
+.map-layers-toggle.active {
+  background: #e11d48;
+  color: #fff;
+}
+
+/*
+ * MapLibre's own control hover lightens the background, which on the active
+ * (red) state left a white icon on a near-white ground. Keep it red, just
+ * darker, so the icon stays legible either way.
+ *
+ * The selector has to out-specify `.maplibregl-ctrl button:not(:disabled):hover`
+ * — three classes and an element — so it names the button element and the
+ * control wrapper too. A plain `.map-layers-toggle.active:hover` ties on class
+ * count and loses on the element.
+ */
+.maplibregl-ctrl button.map-layers-toggle.active:hover {
+  background-color: #be123c;
+  color: #fff;
+}
+
+/*
+ * Anchored under its button; `top` is measured from the button at open time,
+ * so only the right edge is pinned here. The z-index clears the sidebar (20)
+ * because on mobile that sidebar is the sheet swiping up from the bottom, and
+ * the menu has to stay readable over it.
+ */
+.layers-popover {
+  position: absolute;
+  right: 10px;
+  z-index: 25;
+  width: 290px;
+  max-width: calc(100vw - 20px);
+  max-height: calc(100vh - 170px);
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 28%);
+}
+
+/* Same inset from the top and the right, so it reads as a corner control. */
+.layers-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  color: #666;
+  cursor: pointer;
+}
+
+.layers-close:hover {
+  background: #f4f4f5;
+  color: #111;
+}
+
+.layers-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.layers-section h3 {
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  /* Clears the close button, which overlaps the first heading's row. */
+  padding-right: 22px;
+}
+
+.layers-section .checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+}
+
+.layers-divider {
+  border: none;
+  border-top: 1px solid #ececee;
+  margin: 0;
+}
+
+.zone-ceiling {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #666;
+}
+
+.zone-ceiling input {
+  width: 68px;
+  border: 1px solid #d4d4d8;
+  border-radius: 7px;
+  padding: 5px 7px;
+  font-size: 13px;
+  color: #333;
+}
+
+/* The one thing in here that is a warning, so it gets the only red block. */
+.zone-stale-warning {
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.zone-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #666;
+  line-height: 1.4;
+}
+
+.zone-legend li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.zone-legend strong {
+  color: #333;
+  font-weight: 600;
+}
+
+/* The age of our copy sits next to the control that changes it. */
+.zone-freshness {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: #666;
+}
+
+.zone-freshness .stale {
+  color: #b91c1c;
+  font-weight: 500;
+}
+
+.zone-disclaimer {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #777;
+}
+
+.zone-popup {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #333;
+}
+
+.zone-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
+.zone-message {
+  display: inline-block;
+  margin-top: 4px;
+  color: #555;
+}
+
+.zone-links {
+  margin-top: 6px;
+}
+
+.zone-source {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #888;
+}
+
+/*
+ * MapLibre pins the popup close button hard into the corner (right: 0, top: 0),
+ * which reads as an accident against the rounded card. Inset it equally from
+ * both edges and give it a hover target; the matching padding on the content
+ * keeps long titles from running underneath it.
+ */
+.maplibregl-popup-close-button {
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 16px;
+  line-height: 1;
+  color: #666;
+}
+
+.maplibregl-popup-close-button:hover {
+  background: #f4f4f5;
+  color: #111;
+}
+
+.maplibregl-popup-content {
+  padding-right: 28px;
+}
+
+/*
+ * A number input under the cursor swallows wheel events and edits its value
+ * instead of scrolling. The handler in main.tsx blurs it so the page scrolls;
+ * this drops the spinners too, since they misfire the same way on a trackpad.
+ */
+input[type='number'] {
+  appearance: textfield;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
 }

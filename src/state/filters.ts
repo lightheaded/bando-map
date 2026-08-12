@@ -29,6 +29,13 @@ export interface FilterState {
   /** ETAK noise cuts, 0 = off: min footprint m² / min distance to an in-use dwelling. */
   etakMinM2: number
   etakMinDwell: number
+  /** UAS geographical zones drawn under the spots. */
+  zones: boolean
+  /**
+   * Height in metres AGL the zones layer is judged against — a zone shows only
+   * when its floor is below this. 120 is the open-category ceiling.
+   */
+  zoneCeiling: number
 }
 
 export const DEFAULT_FILTERS: FilterState = {
@@ -44,6 +51,8 @@ export const DEFAULT_FILTERS: FilterState = {
   // tuned toward bigger buildings well clear of occupied yards.
   etakMinM2: 300,
   etakMinDwell: 200,
+  zones: true,
+  zoneCeiling: 120,
 }
 
 export function matchesFilters(b: Bando, f: FilterState, mark: UserMark | undefined): boolean {
@@ -64,10 +73,16 @@ export function matchesFilters(b: Bando, f: FilterState, mark: UserMark | undefi
   return true
 }
 
+/**
+ * Every layer is driven from the Layers menu on the map, not from this panel,
+ * so counting them would make the Filters badge claim a filter it can't show.
+ */
+const LAYER_KEYS: (keyof FilterState)[] = ['hints', 'etakMinM2', 'etakMinDwell', 'zones', 'zoneCeiling']
+
 /** Count of filters that differ from the defaults, for the filter-button badge. */
 export function activeFilterCount(f: FilterState): number {
   return (Object.keys(DEFAULT_FILTERS) as (keyof FilterState)[]).filter(
-    (k) => JSON.stringify(f[k]) !== JSON.stringify(DEFAULT_FILTERS[k]),
+    (k) => !LAYER_KEYS.includes(k) && JSON.stringify(f[k]) !== JSON.stringify(DEFAULT_FILTERS[k]),
   ).length
 }
 

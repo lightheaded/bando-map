@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { MapView } from './map/MapView'
 import { Sidebar } from './components/Sidebar'
+import { LayerSwitcher } from './components/LayerSwitcher'
+import { LayersPopover } from './components/LayersPopover'
 import { AddPlaceForm } from './components/AddPlace'
 import { UpdateBanner } from './components/UpdateBanner'
 import { useDeepLink } from './state/deeplink'
@@ -38,6 +40,8 @@ export default function App() {
   return (
     <div className="app">
       <MapView />
+      <LayerSwitcher />
+      <LayersPopover />
       <Sidebar />
       <AddPlaceForm />
       <UpdateBanner />
