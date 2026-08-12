@@ -27,6 +27,20 @@ export const StorageIcon = () => (
   </svg>
 )
 
+export const ChevronsLeftIcon = () => (
+  <svg {...props}>
+    <path d="M11 17l-5-5 5-5" />
+    <path d="M18 17l-5-5 5-5" />
+  </svg>
+)
+
+export const ChevronsRightIcon = () => (
+  <svg {...props}>
+    <path d="M13 17l5-5-5-5" />
+    <path d="M6 17l5-5-5-5" />
+  </svg>
+)
+
 export const MapPinIcon = () => (
   <svg {...props}>
     <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" />

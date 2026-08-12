@@ -1,6 +1,7 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
+import { ChevronsLeftIcon, ChevronsRightIcon } from './icons'
 import { LayerSwitcher } from './LayerSwitcher'
 import { FilterButton, FilterPanel } from './FilterBar'
 import { OfflineButton, OfflinePanel } from './OfflinePanel'
@@ -42,7 +43,14 @@ export function Sidebar() {
   const editedName = useMarksStore((s) => (selectedId != null ? s.marks[selectedId]?.edits?.name : undefined))
   const sheetOpen = useAppStore((s) => s.sheetOpen)
   const setSheetOpen = useAppStore((s) => s.setSheetOpen)
+  const collapsed = useAppStore((s) => s.sidebarCollapsed)
+  const setCollapsed = useAppStore((s) => s.setSidebarCollapsed)
   const count = useInViewBandos().length
+
+  // Picking a spot on the collapsed map brings the panel back for the detail.
+  useEffect(() => {
+    if (selectedId != null) setCollapsed(false)
+  }, [selectedId, setCollapsed])
 
   const asideRef = useRef<HTMLElement>(null)
   const drag = useRef<{ startY: number; startH: number; lastY: number; moved: boolean } | null>(null)
@@ -87,7 +95,14 @@ export function Sidebar() {
 
   const label = editedName ?? selectedName ?? placeName ?? `${count} in view`
   return (
-    <aside ref={asideRef} className={`sidebar ${sheetOpen ? 'expanded' : ''}`}>
+    <>
+      {/* Floats in the corner while the sidebar is away (desktop only). */}
+      {collapsed && (
+        <button className="sidebar-reveal" title="Show the panel" onClick={() => setCollapsed(false)}>
+          <ChevronsRightIcon />
+        </button>
+      )}
+      <aside ref={asideRef} className={`sidebar ${sheetOpen ? 'expanded' : ''} ${collapsed ? 'collapsed' : ''}`}>
       <button
         className="sheet-handle"
         aria-label={sheetOpen ? 'Collapse panel' : 'Expand panel'}
@@ -111,6 +126,13 @@ export function Sidebar() {
         <LayerSwitcher />
         <FilterButton />
         <UpdateButton />
+        <button
+          className="filter-button sidebar-collapse"
+          title="Hide the panel — explore the full map"
+          onClick={() => setCollapsed(true)}
+        >
+          <ChevronsLeftIcon />
+        </button>
       </div>
       <FilterPanel />
       <div className="sidebar-body">{selectedId != null ? <DetailContent /> : <PlacesList />}</div>
@@ -126,6 +148,7 @@ export function Sidebar() {
         <SyncButton />
         <AdminButton />
       </nav>
-    </aside>
+      </aside>
+    </>
   )
 }
