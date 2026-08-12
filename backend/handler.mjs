@@ -5,7 +5,7 @@
  *   PUT  /sync                    <- UserData                       -> { updatedAt }
  *   GET  /submissions             -> { submissions }                (caller's own, newest first)
  *   POST /submissions             <- SubmissionData                 -> { submission }
- *   GET  /admin/overview          -> { submissions, users }         (admin)
+ *   GET  /admin/overview          -> { submissions, users, visits }  (admin)
  *   POST /admin/submissions/{id}  <- { action, reason? }            -> { submission } (admin)
  *
  * The API Gateway JWT authorizer validates the Cognito ID token before this
@@ -14,9 +14,11 @@
  * approved submissions and publishes it to the site bucket + invalidates the
  * CloudFront path, so decisions reach every client without a rescrape.
  *
- * Storage: the sync table doubles as the submission store — sync documents
- * live at pk=<cognito sub>, submissions at pk=sub#<uuid>. Listing scans; at
- * this scale (a handful of users, few hundred submissions) that beats a GSI.
+ * Storage: the sync table doubles as the submission store and the visit-stats
+ * store — sync documents live at pk=<cognito sub>, submissions at pk=sub#<uuid>,
+ * one day of visit counts at pk=stat#<YYYY-MM-DD> (written by the rollup Lambda,
+ * backend/rollup.mjs). Listing scans; at this scale (a handful of users, few
+ * hundred submissions, a few months of days) that beats a GSI.
  */
 import { randomUUID } from 'node:crypto'
 import { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb'
@@ -38,6 +40,8 @@ const USER_POOL_ID = process.env.USER_POOL_ID
 // DynamoDB items cap at 400 KB; leave headroom for the key and metadata.
 const MAX_SYNC_BYTES = 350_000
 const MAX_SUBMISSION_BYTES = 8_000
+// How many days of visit stats the admin overview carries.
+const VISIT_DAYS = 90
 // Loose Estonia bounding box — sanity check for submitted coordinates.
 const BOUNDS = { latMin: 57.0, latMax: 60.5, lonMin: 20.5, lonMax: 29.0 }
 const OVERRIDE_FIELDS = ['lat', 'lon', 'name', 'address', 'period', 'usage', 'condition']
@@ -242,15 +246,43 @@ async function decideSubmission(claims, event) {
 }
 
 async function adminOverview() {
-  const [submissions, users, syncDocs] = await Promise.all([
+  const [submissions, users, syncDocs, visits] = await Promise.all([
     allSubmissions(),
     listUsers(),
     listSyncTimestamps(),
+    listVisits(),
   ])
   return res(200, {
     submissions,
     users: users.map((u) => ({ ...u, lastSyncAt: syncDocs.get(u.sub), sub: undefined })),
+    visits,
   })
+}
+
+/**
+ * Daily visit counts (pk=stat#<date>), newest first. Aggregates only — the
+ * rollup never stores a viewer IP, just how many distinct ones it saw.
+ */
+async function listVisits() {
+  const days = []
+  let key
+  do {
+    const out = await db.send(
+      new ScanCommand({
+        TableName: TABLE,
+        FilterExpression: 'begins_with(pk, :prefix)',
+        ExpressionAttributeValues: { ':prefix': { S: 'stat#' } },
+        ProjectionExpression: 'pk, #d, updatedAt',
+        ExpressionAttributeNames: { '#d': 'data' },
+        ExclusiveStartKey: key,
+      }),
+    )
+    for (const item of out.Items ?? []) {
+      days.push({ date: item.pk.S.slice(5), updatedAt: item.updatedAt?.S, ...JSON.parse(item.data.S) })
+    }
+    key = out.LastEvaluatedKey
+  } while (key)
+  return days.sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, VISIT_DAYS)
 }
 
 async function listUsers() {
@@ -275,8 +307,9 @@ async function listSyncTimestamps() {
     const out = await db.send(
       new ScanCommand({
         TableName: TABLE,
-        FilterExpression: 'NOT begins_with(pk, :prefix)',
-        ExpressionAttributeValues: { ':prefix': { S: 'sub#' } },
+        // Everything that isn't a submission or a stats rollup is a sync doc.
+        FilterExpression: 'NOT begins_with(pk, :prefix) AND NOT begins_with(pk, :stat)',
+        ExpressionAttributeValues: { ':prefix': { S: 'sub#' }, ':stat': { S: 'stat#' } },
         ProjectionExpression: 'pk, updatedAt',
         ExclusiveStartKey: key,
       }),
