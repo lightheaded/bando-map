@@ -127,7 +127,7 @@ export function ContributePanel() {
           Bando Map is community-sourced: move mispinned spots, fix wrong details, add missing places. Submit your
           changes for review — approved ones go live on everyone's map.
         </p>
-        <button className={`btn btn-small ${picking ? 'btn-rejected' : ''}`} onClick={startAdd}>
+        <button className={`btn btn-small ${picking ? 'btn-active' : ''}`} onClick={startAdd}>
           {picking ? 'Cancel adding' : '+ Add a place'}
         </button>
       </div>

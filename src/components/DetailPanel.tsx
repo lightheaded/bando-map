@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
-import { MapPinIcon } from './icons'
+import { EditIcon, MapPinIcon } from './icons'
 import { placeToBando, resolveBando } from '../state/filters'
 import { wgs84ToLest97 } from '../geo/lest97'
 import {
@@ -19,23 +19,31 @@ import {
   type BandoEdits,
 } from '../types'
 
-/** The triage buttons are toggles — the checkbox says so at a glance. */
+/**
+ * The triage buttons are color-coded checkbox toggles: outline when off, a
+ * subtle fill when on. The checkbox is drawn by hand (styled via CSS off
+ * aria-pressed) because the native one can't take the state colors.
+ */
 function ToggleButton({
   checked,
-  activeClass,
+  color,
   title,
   onClick,
   children,
 }: {
   checked: boolean
-  activeClass: string
+  color: 'shortlisted' | 'rejected' | 'visited'
   title: string
   onClick: () => void
   children: ReactNode
 }) {
   return (
-    <button className={`btn toggle-btn ${checked ? activeClass : ''}`} title={title} aria-pressed={checked} onClick={onClick}>
-      <input type="checkbox" checked={checked} readOnly tabIndex={-1} aria-hidden="true" />
+    <button className={`btn toggle-btn toggle-${color}`} title={title} aria-pressed={checked} onClick={onClick}>
+      <span className="toggle-check" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      </span>
       {children}
     </button>
   )
@@ -210,14 +218,20 @@ export function DetailContent() {
           ← List
         </button>
         <button
-          className={`btn btn-small ${editing ? 'btn-rejected' : ''}`}
+          className={`btn btn-small btn-iconed ${editing ? 'btn-active' : ''}`}
           title="Correct this place's information"
           onClick={() => setEditing(!editing)}
         >
-          {editing ? 'Cancel' : '✎ Edit'}
+          {editing ? (
+            'Cancel'
+          ) : (
+            <>
+              <EditIcon /> Edit
+            </>
+          )}
         </button>
         <button
-          className="btn btn-small move-btn"
+          className="btn btn-small btn-iconed"
           title="Correct this pin's position: click, then tap the map at the right spot"
           onClick={() => {
             useAppStore.getState().setMoveTarget(item.id)
@@ -279,23 +293,23 @@ export function DetailContent() {
       <div className="mark-actions">
         <ToggleButton
           checked={status === 'shortlisted'}
-          activeClass="btn-shortlisted"
+          color="shortlisted"
           title="Looks worth a visit"
           onClick={() => setStatus('shortlisted')}
         >
-          ♥ Shortlisted
+          Shortlisted
         </ToggleButton>
         <ToggleButton
           checked={status === 'rejected'}
-          activeClass="btn-rejected"
+          color="rejected"
           title="Not a usable spot — hide it"
           onClick={() => setStatus('rejected')}
         >
-          ✕ Rejected
+          Rejected
         </ToggleButton>
         <ToggleButton
           checked={!!mark?.visited}
-          activeClass="btn-visited"
+          color="visited"
           title="You were physically there"
           onClick={() =>
             setMark(item.id, {
@@ -304,7 +318,7 @@ export function DetailContent() {
             })
           }
         >
-          ⚑ Visited
+          Visited
         </ToggleButton>
         {mark?.visited && (
           <input
