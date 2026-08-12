@@ -15,7 +15,7 @@ export interface GeocodeResult {
   matchedAddress: string
 }
 
-interface InAdsAddress {
+export interface InAdsAddress {
   viitepunkt_b: string
   viitepunkt_l: string
   viitepunkt_x: string
@@ -24,22 +24,45 @@ interface InAdsAddress {
   pikkaadress: string
   omavalitsus: string
   maakond: string
+  /** Cadastral number (katastritunnus), present on KATASTRIYKSUS hits. */
+  tunnus?: string
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-function precisionOf(liikVal: string): GeocodeResult['precision'] {
+export function precisionOf(liikVal: string): GeocodeResult['precision'] {
   if (liikVal === 'EHITISHOONE' || liikVal === 'KATASTRIYKSUS') return 'building'
   if (liikVal === 'TANAV' || liikVal === 'VAIKEKOHT') return 'street'
   return 'village'
 }
 
-async function query(address: string): Promise<InAdsAddress[]> {
+export async function query(address: string): Promise<InAdsAddress[]> {
   const url = `${GAZETTEER}?address=${encodeURIComponent(address)}&results=5`
   const res = await fetch(url)
   if (!res.ok) throw new Error(`gazetteer HTTP ${res.status} for "${address}"`)
   const data = (await res.json()) as { addresses?: InAdsAddress[] }
   return data.addresses ?? []
+}
+
+const toResult = (hit: InAdsAddress, precision: GeocodeResult['precision']): GeocodeResult => ({
+  lat: Number(hit.viitepunkt_b),
+  lon: Number(hit.viitepunkt_l),
+  lestX: Number(hit.viitepunkt_x),
+  lestY: Number(hit.viitepunkt_y),
+  precision,
+  matchedAddress: hit.pikkaadress,
+})
+
+/**
+ * Resolve a katastritunnus to its parcel reference point. The county must
+ * match the register record's, guarding against a stray NNNNN:NNN:NNNN
+ * elsewhere in the PDF resolving to an unrelated parcel.
+ */
+export async function geocodeCadastral(tunnus: string, county: string): Promise<GeocodeResult | undefined> {
+  const candidates = await query(tunnus)
+  await sleep(300)
+  const hit = candidates.find((c) => c.tunnus === tunnus && c.maakond === county)
+  return hit && toResult(hit, 'building')
 }
 
 /**
@@ -72,15 +95,7 @@ export async function geocode(address: string, municipality: string, county: str
       (attempt !== municipality ? candidates.find((c) => c.maakond === county) : undefined)
     if (hit) {
       // A fallback attempt that only matched the settlement is village precision at best.
-      const precision = attempt === municipality ? 'village' : precisionOf(hit.liikVal)
-      return {
-        lat: Number(hit.viitepunkt_b),
-        lon: Number(hit.viitepunkt_l),
-        lestX: Number(hit.viitepunkt_x),
-        lestY: Number(hit.viitepunkt_y),
-        precision,
-        matchedAddress: hit.pikkaadress,
-      }
+      return toResult(hit, attempt === municipality ? 'village' : precisionOf(hit.liikVal))
     }
   }
   return undefined

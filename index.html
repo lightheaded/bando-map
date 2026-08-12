@@ -13,6 +13,17 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Test hook: ?rafshim drives requestAnimationFrame with setTimeout so the
+      map loads in hidden/automated tabs (Chrome parks rAF there, and MapLibre
+      never fires `load` without it). Inert in normal use.
+    -->
+    <script>
+      if (new URLSearchParams(location.search).has('rafshim')) {
+        window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16)
+        window.cancelAnimationFrame = (id) => clearTimeout(id)
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

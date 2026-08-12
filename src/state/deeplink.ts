@@ -1,15 +1,28 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from './store'
 import { useMarksStore } from './marks'
+import { HINT_SOURCES, type HintSourceId } from '../types'
 
 /**
- * Shareable links: #b/<id>@<lat>,<lon>
- * If the id exists (dataset bando or own custom place) it gets selected;
- * otherwise the map zooms to the embedded coordinates.
+ * Shareable links:
+ *   #b/<id>@<lat>,<lon>          — dataset bando or own custom place
+ *   #h/<src>/<id>@<lat>,<lon>    — hint-layer spot (etak/osm/esap/teadaanded)
+ * If a #b id exists it gets selected; otherwise the map zooms to the embedded
+ * coordinates. A #h link also enables that hint layer if it's off, so the
+ * receiver actually sees the spot.
  */
 const HASH_RE = /^#b\/(-?\d+)(?:@(-?\d+\.?\d*),(-?\d+\.?\d*))?$/
+const HINT_HASH_RE = /^#h\/([a-z]+)\/([^@]+)@(-?\d+\.?\d*),(-?\d+\.?\d*)$/
 
 function applyHash(hash: string) {
+  const hint = hash.match(HINT_HASH_RE)
+  if (hint && (HINT_SOURCES as readonly string[]).includes(hint[1])) {
+    const src = hint[1] as HintSourceId
+    const { filters, setFilters, setPendingHint } = useAppStore.getState()
+    if (!filters.hints.includes(src)) setFilters({ hints: [...filters.hints, src] })
+    setPendingHint({ src, id: decodeURIComponent(hint[2]), lat: Number(hint[3]), lon: Number(hint[4]) })
+    return
+  }
   const m = hash.match(HASH_RE)
   if (!m) return
   // Before the dataset arrives the initial-apply effect below handles the hash.
@@ -24,6 +37,19 @@ function applyHash(hash: string) {
     showToast('That spot is not in your dataset — showing its location')
   } else {
     showToast('That spot is not in your dataset')
+  }
+}
+
+/** Rewrite the hash to match the current selection — also used when a hint popup closes. */
+export function syncHashToSelection() {
+  const { selectedId, bandos } = useAppStore.getState()
+  const raw = bandos.find((b) => b.id === selectedId) ?? useMarksStore.getState().places.find((p) => p.id === selectedId)
+  const fix = selectedId != null ? useMarksStore.getState().marks[selectedId]?.fix : undefined
+  const item = raw && fix ? { ...raw, lat: fix.lat, lon: fix.lon } : raw
+  if (item) {
+    history.replaceState(null, '', `#b/${item.id}@${item.lat.toFixed(6)},${item.lon.toFixed(6)}`)
+  } else {
+    history.replaceState(null, '', location.pathname + location.search)
   }
 }
 
@@ -53,14 +79,6 @@ export function useDeepLink() {
   // Keep the URL shareable: selection writes the hash, deselection clears it.
   useEffect(() => {
     if (!ready.current) return
-    const raw =
-      useAppStore.getState().bandos.find((b) => b.id === selectedId) ??
-      useMarksStore.getState().places.find((p) => p.id === selectedId)
-    const item = raw && fix ? { ...raw, lat: fix.lat, lon: fix.lon } : raw
-    if (item) {
-      history.replaceState(null, '', `#b/${item.id}@${item.lat.toFixed(6)},${item.lon.toFixed(6)}`)
-    } else {
-      history.replaceState(null, '', location.pathname + location.search)
-    }
+    syncHashToSelection()
   }, [selectedId, fix])
 }

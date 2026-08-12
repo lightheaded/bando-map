@@ -125,3 +125,28 @@ The app is a static site served from S3 behind CloudFront at **https://bando.lag
 The source code is [MIT-licensed](LICENSE). Register data and photos are not part of this repository and remain with their respective owners.
 
 Fly responsibly: heritage-listed buildings are protected — look, film, don't touch. Check local drone regulations (droonid.ee) before flying.
+## Versioning & releases
+
+Releases are semver git tags (`v0.x.y`, minor = feature release, patch = fix) with a
+human-readable history in [CHANGELOG.md](CHANGELOG.md). The version in `package.json` is
+the single source of truth; Vite injects it at build time and the app shows it behind the
+map's attribution ⓘ icon, linked to the changelog. Versions up to v0.13.0 were tagged
+retroactively from git history with backdated tag dates.
+
+To cut a release, in the same commit that ships the feature to `main`: move its
+`[Unreleased]` changelog entries under a new version heading, bump `version` in
+`package.json` to match, then:
+
+```sh
+git tag -a v0.14.0 -m "One-line summary"   # matches the new package.json version
+git push --follow-tags
+```
+
+Pushing the tag auto-creates a [GitHub Release](https://github.com/lightheaded/bando-map/releases)
+with that version's changelog section as notes (`.github/workflows/release.yml`).
+
+- Hint layers (optional map overlays, `npm run scrape-hints`):
+  - ETAK ruins: [Eesti topograafia andmekogu](https://geoportaal.maaruum.ee/) (Maa- ja Ruumiamet), open-data license, attribution required
+  - OSM ruins: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL — kept as its own dataset (collective database), never merged record-by-record with other sources
+  - Military heritage: [Eesti sõjaajaloo teejuht](https://teejuht.esap.ee/) (Eesti Sõjamuuseum / ESAP), used in good faith with attribution — spots link and preview their own [ESAP database](https://db.esap.ee/) record; the photos stay hot-linked from db.esap.ee, never copied into this project
+  - Officially ownerless buildings: [Ametlikud Teadaanded](https://www.ametlikudteadaanded.ee/) (peremehetu ehitise hõivamise teated) — spots keep the announcing municipality's contact and link the original notice; last-known-owner names are not redistributed

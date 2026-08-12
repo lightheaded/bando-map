@@ -3,10 +3,23 @@ import maplibregl from 'maplibre-gl'
 import type { Feature, FeatureCollection, Point } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { mapStyle, applyBaseLayer } from './layers'
+import {
+  addHintLayers,
+  etakFilter,
+  hintFeatureCollection,
+  hintHash,
+  hintLayerId,
+  hintPlaceComment,
+  hintPopupHtml,
+  hintSpotName,
+  hintSpotProps,
+  type HintProps,
+} from './hints'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
-import { useFilteredBandos, resolveBando } from '../state/filters'
-import { PHOTO_URL, type Bando, type UserMark } from '../types'
+import { useFilteredBandos, resolveBando, revealPlace } from '../state/filters'
+import { syncHashToSelection } from '../state/deeplink'
+import { HINT_SOURCES, PHOTO_URL, type Bando, type HintSourceId, type UserMark } from '../types'
 
 const ESTONIA_BOUNDS: [number, number, number, number] = [21.5, 57.4, 28.3, 59.8]
 const VIEW_KEY = 'bando-map:view'
@@ -127,6 +140,56 @@ function syncPhotoMarkers(
   }
 }
 
+/**
+ * Hint popup: shareable (#h/… hash while open), with a one-click promotion to
+ * a regular custom place — the place then flows through the normal edit /
+ * contribute pipeline like any manual addition, with provenance in its note.
+ */
+function openHintPopup(map: maplibregl.Map, src: HintSourceId, props: HintProps) {
+  const state = useAppStore.getState()
+  const popup = new maplibregl.Popup({ maxWidth: '320px' })
+    .setLngLat([props.lon, props.lat])
+    .setHTML(hintPopupHtml(src, props, state.hintData[src]?.source ?? ''))
+    .addTo(map)
+  history.replaceState(null, '', hintHash(src, props))
+  popup.on('close', () => syncHashToSelection())
+  wireHintPhotoWheel(popup.getElement())
+  popup.getElement()?.querySelector<HTMLButtonElement>('.hint-add')?.addEventListener('click', () => {
+    const name = hintSpotName(src, props)
+    const id = useMarksStore.getState().addPlace({ name, lat: props.lat, lon: props.lon })
+    useMarksStore.getState().setMark(id, { comment: hintPlaceComment(src, props) })
+    popup.remove()
+    useAppStore.getState().select(id)
+    const widened = revealPlace(id)
+    useAppStore.getState().showToast(`Saved "${name}" as your place${widened ? ' — filters widened to show it' : ''}`, {
+      label: 'Undo',
+      onClick: () => useMarksStore.getState().removePlace(id),
+    })
+  })
+}
+
+/**
+ * Let the wheel scroll the photo strip. The strip only overflows sideways, which
+ * a vertical wheel gesture won't move on its own, and the popup sits inside the
+ * map container — so an unhandled wheel would zoom the map instead. When there
+ * is nothing to scroll the event is left alone, keeping zoom-over-popup intact.
+ */
+function wireHintPhotoWheel(root: HTMLElement | undefined) {
+  const strip = root?.querySelector<HTMLElement>('.hint-photos')
+  strip?.addEventListener(
+    'wheel',
+    (e) => {
+      if (strip.scrollWidth <= strip.clientWidth) return
+      const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX
+      if (!delta) return
+      e.preventDefault()
+      e.stopPropagation()
+      strip.scrollLeft += delta
+    },
+    { passive: false },
+  )
+}
+
 function toGeoJSON(bandos: Bando[], marks: Record<number, UserMark>): FeatureCollection {
   return {
     type: 'FeatureCollection',
@@ -171,7 +234,12 @@ export function MapView() {
       ...(restored
         ? { center: restored.center, zoom: restored.zoom }
         : { bounds: ESTONIA_BOUNDS, fitBoundsOptions: { padding: 20 } }),
-      attributionControl: { compact: true },
+      attributionControl: {
+        compact: true,
+        customAttribution:
+          `<a href="https://github.com/lightheaded/bando-map/blob/main/CHANGELOG.md" target="_blank">` +
+          `Bando Map v${__APP_VERSION__}</a>`,
+      },
       // North up, always — no rotation or tilt.
       dragRotate: false,
       pitchWithRotate: false,
@@ -253,6 +321,22 @@ export function MapView() {
       // Unclustered spots are photo markers (HTML, see syncPhotoMarkers) —
       // only clusters render as circles.
 
+      // Hint layers render beneath the clusters; clicking a hint point opens
+      // a lightweight popup (hints are leads, not part of the triage flow).
+      addHintLayers(map, 'clusters')
+      for (const id of HINT_SOURCES) {
+        map.on('click', hintLayerId(id), (e) => {
+          const state = useAppStore.getState()
+          if (state.placeDraft || state.moveTarget != null) return
+          const f = e.features?.[0]
+          if (!f) return
+          openHintPopup(map, id, f.properties as HintProps)
+          e.preventDefault()
+        })
+        map.on('mouseenter', hintLayerId(id), () => (map.getCanvas().style.cursor = 'pointer'))
+        map.on('mouseleave', hintLayerId(id), () => (map.getCanvas().style.cursor = ''))
+      }
+
       // Admin review overlay: red = current position, green = proposed, a
       // dashed line between them. Empty until setReviewDiff populates it.
       map.addSource('review-diff', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
@@ -291,6 +375,8 @@ export function MapView() {
         })
       })
       map.on('click', (e) => {
+        // A hint-point click (preventDefault above) shouldn't also deselect.
+        if (e.defaultPrevented) return
         const state = useAppStore.getState()
         // Move tool: the next tap is the corrected position.
         if (state.moveTarget != null) {
@@ -333,6 +419,52 @@ export function MapView() {
     ;(map.getSource('bandos') as maplibregl.GeoJSONSource | undefined)?.setData(toGeoJSON(bandos, marks))
   }, [bandos, marks, sourceReady])
 
+  // Hint layers: fetch lazily when first enabled, then drive visibility,
+  // data and the ETAK noise filter from state.
+  const hintData = useAppStore((s) => s.hintData)
+  useEffect(() => {
+    // Fetch enabled layers' data right away — not gated on the map, so a slow
+    // style load doesn't also delay the dataset download.
+    for (const id of HINT_SOURCES) {
+      if (filters.hints.includes(id) && !hintData[id]) useAppStore.getState().loadHint(id)
+    }
+    const map = mapRef.current
+    if (!map || !sourceReady) return
+    for (const id of HINT_SOURCES) {
+      map.setLayoutProperty(hintLayerId(id), 'visibility', filters.hints.includes(id) ? 'visible' : 'none')
+    }
+    map.setFilter(hintLayerId('etak'), etakFilter(filters.etakMinM2, filters.etakMinDwell))
+  }, [filters, hintData, sourceReady])
+
+  // Hint deep link (#h/<src>/<id>): once the layer's data is in, zoom to the
+  // spot and open its popup — the layer itself was enabled by applyHash.
+  const pendingHint = useAppStore((s) => s.pendingHint)
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !sourceReady || !pendingHint) return
+    const dataset = hintData[pendingHint.src]
+    if (!dataset) return // loadHint is in flight; this effect re-runs when it lands
+    useAppStore.getState().setPendingHint(undefined)
+    const spot = dataset.spots.find((s) => s.id === pendingHint.id)
+    map.jumpTo({ center: [pendingHint.lon, pendingHint.lat], zoom: 15 })
+    if (spot) {
+      openHintPopup(map, pendingHint.src, hintSpotProps(spot))
+    } else {
+      useAppStore.getState().showToast('That hint is not in the current dataset — showing its location')
+    }
+  }, [pendingHint, hintData, sourceReady])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !sourceReady) return
+    for (const id of HINT_SOURCES) {
+      const dataset = hintData[id]
+      if (!dataset) continue
+      const source = map.getSource(hintLayerId(id)) as maplibregl.GeoJSONSource | undefined
+      source?.setData(hintFeatureCollection(dataset))
+    }
+  }, [hintData, sourceReady])
+
   // Photo markers: re-sync when the data, marks or selection change; the map
   // event handlers above re-sync on zoom/pan via syncMarkersRef.
   useEffect(() => {
@@ -373,7 +505,16 @@ export function MapView() {
   }, [selectedId, sourceReady])
 
   // Frame the filtered result set whenever the filters change — but not on
-  // mount, so a restored view (dev reload, refresh) isn't yanked away.
+  // mount, so a restored view (dev reload, refresh) isn't yanked away. Hint
+  // toggles don't affect which bandos show, so they must not refit either.
+  const bandoFilterKey = JSON.stringify([
+    filters.usage,
+    filters.condition,
+    filters.county,
+    filters.status,
+    filters.minRating,
+    filters.search,
+  ])
   const filtersTouched = useRef(false)
   useEffect(() => {
     const map = mapRef.current
@@ -382,6 +523,9 @@ export function MapView() {
       filtersTouched.current = true
       return
     }
+    // A selected place is the focus — don't yank the view away from it (e.g.
+    // saving a new place widens the filters right after easing to the spot).
+    if (useAppStore.getState().selectedId != null) return
     const pts = bandosRef.current
     if (!pts.length) return
     let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity
@@ -404,7 +548,8 @@ export function MapView() {
         duration: 600,
       },
     )
-  }, [filters, sourceReady])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bandoFilterKey, sourceReady])
 
   // Admin review: draw the pin-move diff and frame it.
   const reviewDiff = useAppStore((s) => s.reviewDiff)
