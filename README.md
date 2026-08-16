@@ -7,8 +7,12 @@ A full-screen map of abandoned buildings ("bandos") in Estonia — potential FPV
 Data comes from the Estonian heritage register's [XX century architecture catalog](https://register.muinas.ee/public.php?menuID=architecture), filtered to buildings that are **not in use** (kasutus: ei kasutata) and in **poor condition** (seisukord: halb). Each spot links back to the register, Google Maps, and Maa-amet's [XGIS](https://xgis.maaamet.ee/xgis2/page/app/maainfo).
 
 <p align="center">
-  <img src="docs/screenshot-desktop.png" alt="Bando Map on desktop — clustered spots across Estonia with the in-view list sidebar" width="672">
-  <img src="docs/screenshot-mobile.png" alt="Bando Map on mobile — detail sheet with photos, triage buttons and rating" width="194">
+  <img src="docs/screenshot-desktop.png" alt="Bando Map on desktop — clustered spots across Estonia with the in-view list sidebar" width="330">
+  <img src="docs/screenshot-desktop-2.png" alt="Bando Map on desktop — spot detail panel with triage state, rating and the hint-layers panel showing ETAK/OSM ruins and UAS airspace zones" width="330">
+</p>
+<p align="center">
+  <img src="docs/screenshot-mobile.png" alt="Bando Map on mobile — clustered spots with the in-view list sheet" width="150">
+  <img src="docs/screenshot-mobile-2.png" alt="Bando Map on mobile — spot detail sheet with photos" width="150">
 </p>
 
 The base map is Maa-amet's own tile service — the same detailed base map, orthophoto, and hybrid layers as the official maainfo app.
