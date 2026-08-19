@@ -3,7 +3,7 @@ import { MapView } from './map/MapView'
 import { Sidebar } from './components/Sidebar'
 import { LayerSwitcher } from './components/LayerSwitcher'
 import { LayersPopover } from './components/LayersPopover'
-import { AddPlaceForm } from './components/AddPlace'
+import { AddPlaceForm, AddPlaceHint } from './components/AddPlace'
 import { UpdateBanner } from './components/UpdateBanner'
 import { useDeepLink } from './state/deeplink'
 import { useAppStore } from './state/store'
@@ -43,6 +43,7 @@ export default function App() {
       <LayerSwitcher />
       <LayersPopover />
       <Sidebar />
+      <AddPlaceHint />
       <AddPlaceForm />
       <UpdateBanner />
       <Toast />

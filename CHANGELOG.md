@@ -7,6 +7,34 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.4.0] — 2026-08-19
+
+### Added
+
+- **A + button on the map for adding a place.** The add-place flow was only
+  reachable from the Contribute panel, so nothing on the map itself said that a
+  missing spot can be added. The map's control stack now carries a + button
+  under Layers. It starts the same flow: the button turns red, a card says
+  *Adding a new place — tap the map where the spot is*, and the tap opens the
+  new-place form in the card's place. Cancel from the card or from the button.
+  Both entry points drive one shared action, so the map button and the panel
+  button always agree on the state.
+
+  The instruction used to be a toast that faded after a few seconds, while the
+  mode itself waited indefinitely. It now stays up until the tap answers it.
+
+- **The picked spot shows as a pin, and a further tap moves it.** A tap on a
+  phone is a blunt instrument, and the form only ever showed the coordinates it
+  produced. A red pin now stands where the tap landed, and every tap after it
+  moves the pin — zoom in and aim again to place it on the building rather than
+  on the field beside it. What you have typed into the form is kept.
+
+### Fixed
+
+- The map attribution ⓘ on a phone sat behind the bottom sheet, so the data
+  credits and the app version behind it could not be read. The attribution now
+  sits above the collapsed sheet.
+
 ## [1.3.0] — 2026-08-12
 
 - **Photos you took.** A place's detail view now takes your own photo of it. The

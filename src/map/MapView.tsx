@@ -4,6 +4,7 @@ import type { Feature, FeatureCollection, Point } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { mapStyle, applyBaseLayer } from './layers'
 import { LayersControl } from './layersControl'
+import { AddPlaceControl } from './addPlaceControl'
 import {
   addHintLayers,
   etakFilter,
@@ -310,8 +311,9 @@ export function MapView() {
       useAppStore.getState().showToast('Location unavailable — check location permissions for this browser'),
     )
     map.addControl(geolocate, 'top-right')
-    // Last in the stack, so it sits directly under "show my location".
+    // Order in the stack: Layers under "show my location", + under Layers.
     map.addControl(new LayersControl(), 'top-right')
+    map.addControl(new AddPlaceControl(), 'top-right')
 
     const publishView = () => {
       const b = map.getBounds()
@@ -430,12 +432,12 @@ export function MapView() {
           })
           return
         }
-        // Add-place mode: the next tap picks the location.
-        if (state.placeDraft === 'picking') {
+        // Add-place mode: the first tap picks the location, and every tap
+        // after it corrects the pin while the form stays open.
+        if (state.placeDraft) {
           state.setPlaceDraft({ lat: e.lngLat.lat, lon: e.lngLat.lng })
           return
         }
-        if (state.placeDraft) return
 
         const cluster = map.queryRenderedFeatures(e.point, { layers: ['clusters'] })[0]
         if (cluster) {
@@ -677,6 +679,32 @@ export function MapView() {
     source.setData({ type: 'FeatureCollection', features })
   }, [reviewDiff, sourceReady])
 
+  /*
+   * The draft pin — the answer to "where did my tap land?". It stands at the
+   * picked spot for as long as the form is open, and follows every further
+   * tap, so an imprecise first tap is corrected by aiming again rather than by
+   * starting over. Clicks pass through it (`.draft-pin`), or it would shield
+   * the very spot the next tap is aimed at.
+   */
+  const draftPinRef = useRef<maplibregl.Marker | undefined>(undefined)
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const at = typeof placeDraft === 'object' ? placeDraft : undefined
+    if (!at) {
+      draftPinRef.current?.remove()
+      draftPinRef.current = undefined
+      return
+    }
+    if (!draftPinRef.current) {
+      const pin = new maplibregl.Marker({ color: '#e11d48' })
+      pin.getElement().classList.add('draft-pin')
+      draftPinRef.current = pin.setLngLat([at.lon, at.lat]).addTo(map)
+    } else {
+      draftPinRef.current.setLngLat([at.lon, at.lat])
+    }
+  }, [placeDraft])
+
   // Deep link to a location that isn't in the dataset.
   useEffect(() => {
     const map = mapRef.current
@@ -688,7 +716,7 @@ export function MapView() {
   return (
     <div
       ref={containerRef}
-      className={`map-container ${placeDraft === 'picking' || moveTarget != null ? 'picking' : ''}`}
+      className={`map-container ${placeDraft != null || moveTarget != null ? 'picking' : ''}`}
     />
   )
 }

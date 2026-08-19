@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useAppStore } from '../state/store'
+import { toggleAddPlace, useAppStore } from '../state/store'
 import { useContribStore, useLocalChanges, refreshSubmissions } from '../state/contrib'
 import { postSubmission } from '../sync/api'
 import { syncEnabled } from '../sync/config'
@@ -70,8 +70,6 @@ function StatusChip({ s }: { s: Submission }) {
 export function ContributePanel() {
   const open = useAppStore((s) => s.panel === 'contribute')
   const placeDraft = useAppStore((s) => s.placeDraft)
-  const setPlaceDraft = useAppStore((s) => s.setPlaceDraft)
-  const setSheetOpen = useAppStore((s) => s.setSheetOpen)
   const showToast = useAppStore((s) => s.showToast)
   const email = useAppStore((s) => s.sync.email)
   const changes = useLocalChanges()
@@ -88,18 +86,10 @@ export function ContributePanel() {
 
   if (!open) return null
 
-  const picking = placeDraft === 'picking'
+  // Picking a spot or filling the form that follows it — both are "adding",
+  // and both are cancelled by the same button.
+  const adding = placeDraft != null
   const selected = changes.filter((c) => !excluded.has(c.targetId))
-
-  const startAdd = () => {
-    if (picking) {
-      setPlaceDraft(undefined)
-      return
-    }
-    setPlaceDraft('picking')
-    setSheetOpen(false) // reveal the map under the mobile sheet
-    showToast('Tap the map where the spot is')
-  }
 
   const toggleRow = (id: number) =>
     setExcluded((prev) => {
@@ -108,7 +98,6 @@ export function ContributePanel() {
       else next.add(id)
       return next
     })
-
 
   const submit = async () => {
     setSubmitting(true)
@@ -148,8 +137,8 @@ export function ContributePanel() {
           Bando Map is community-sourced: move mispinned spots, fix wrong details, add missing places, add your own
           photos from a place's detail view. Submit your changes for review — approved ones go live on everyone's map.
         </p>
-        <button className={`btn btn-small ${picking ? 'btn-active' : ''}`} onClick={startAdd}>
-          {picking ? 'Cancel adding' : '+ Add a place'}
+        <button className={`btn btn-small ${adding ? 'btn-active' : ''}`} onClick={toggleAddPlace}>
+          {adding ? 'Cancel adding' : '+ Add a place'}
         </button>
       </div>
 
