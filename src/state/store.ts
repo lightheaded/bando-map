@@ -280,5 +280,22 @@ export const useAppStore = create<AppState>((set) => ({
   setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
 }))
 
+/**
+ * Start or cancel add-place mode. Both entry points — the map's + control and
+ * the Contribute panel's button — call this, so they can never disagree about
+ * what the mode is or how it is announced.
+ */
+export function toggleAddPlace(): void {
+  const s = useAppStore.getState()
+  if (s.placeDraft) {
+    s.setPlaceDraft(undefined)
+    return
+  }
+  s.setPlaceDraft('picking')
+  s.setSheetOpen(false) // reveal the map under the mobile sheet
+  // No toast: AddPlaceHint carries the instruction, and it stays up until the
+  // tap answers it.
+}
+
 // Debug/verification handle (harmless — all state is the user's own, local).
 ;(window as unknown as { __store: typeof useAppStore }).__store = useAppStore
