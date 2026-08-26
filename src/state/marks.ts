@@ -9,6 +9,8 @@ interface MarksState {
   addPlace: (place: Omit<CustomPlace, 'id' | 'createdAt'>) => number
   updatePlace: (id: number, patch: Partial<Omit<CustomPlace, 'id' | 'createdAt'>>) => void
   removePlace: (id: number) => void
+  /** Put a removed place back, id and mark included — what Undo needs. */
+  restorePlace: (place: CustomPlace, mark?: UserMark) => void
   importData: (data: UserData) => { merged: number }
 }
 
@@ -44,6 +46,11 @@ export const useMarksStore = create<MarksState>()(
           delete marks[id]
           return { places: s.places.filter((p) => p.id !== id), marks }
         }),
+      restorePlace: (place, mark) =>
+        set((s) => ({
+          places: s.places.some((p) => p.id === place.id) ? s.places : [...s.places, place],
+          marks: mark ? { ...s.marks, [place.id]: mark } : s.marks,
+        })),
       importData: (data) => {
         if (data.version !== 1 || typeof data.marks !== 'object') throw new Error('Unrecognized export format')
         const current = { ...get().marks }
@@ -81,6 +88,11 @@ export const useMarksStore = create<MarksState>()(
     },
   ),
 )
+
+// Debug/verification handle, like window.__store — the user's own local data,
+// and the only way to drive a sync-shaped change (a note arriving from another
+// device) from a browser console.
+;(window as unknown as { __marks: typeof useMarksStore }).__marks = useMarksStore
 
 export function exportUserData(): UserData {
   const { marks, places } = useMarksStore.getState()

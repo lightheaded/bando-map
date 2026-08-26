@@ -19,6 +19,12 @@
  * an approved deletion lands in the file's `deleted` list and every client drops
  * that id.
  *
+ * A submission from an admin is approved as it arrives. The review queue exists
+ * to hold work back until a reviewer trusts it, and an admin already is that
+ * reviewer — queueing their own contribution only asks them to press a button
+ * against themselves. The record is identical to a reviewed one (status
+ * approved, decidedAt set), so it publishes and can be withdrawn like any other.
+ *
  * Photos arrive already resized and re-encoded by the browser
  * (src/photos/prepare.ts), which is what keeps this Lambda out of the business
  * of decoding hostile pixels: it sniffs the container header for the format and
@@ -171,11 +177,15 @@ async function createSubmission(claims, event) {
     (s) => s.status === 'pending' && s.data.type !== 'photo' && s.data.targetId === data.targetId,
   )
   const id = pending?.id ?? randomUUID()
+  const now = new Date().toISOString()
+  // An admin reviews contributions, so theirs are published as they arrive.
+  const live = groups(claims).includes(ADMIN_GROUP)
   const submission = {
     id,
     email: claims.email,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
+    status: live ? 'approved' : 'pending',
+    createdAt: now,
+    ...(live ? { decidedAt: now } : {}),
     data,
   }
   await db.send(
@@ -185,12 +195,14 @@ async function createSubmission(claims, event) {
         pk: { S: `sub#${id}` },
         owner: { S: claims.sub },
         email: { S: claims.email ?? '' },
-        status: { S: 'pending' },
-        createdAt: { S: submission.createdAt },
+        status: { S: submission.status },
+        createdAt: { S: now },
+        ...(live ? { decidedAt: { S: now } } : {}),
         data: { S: JSON.stringify(data) },
       },
     }),
   )
+  if (live) await republishCommunity(submission)
   return res(200, { submission })
 }
 
@@ -285,15 +297,21 @@ async function createPhoto(claims, event) {
   const checked = checkRenders(body)
   if (checked.error) return res(400, { error: checked.error })
 
+  // An admin reviews contributions, so theirs are published as they arrive.
+  const live = groups(claims).includes(ADMIN_GROUP)
+
   // Two ceilings, both per contributor: how much can be waiting for review at
-  // once, and how much can arrive in a day.
-  const mine = await allSubmissions({ attr: 'owner', value: claims.sub })
-  const photos = mine.filter((s) => s.data.type === 'photo')
-  if (photos.filter((s) => s.status === 'pending').length >= MAX_PENDING_PHOTOS)
-    return res(429, { error: `${MAX_PENDING_PHOTOS} of your photos are already waiting for review` })
-  const today = new Date().toISOString().slice(0, 10)
-  if (photos.filter((s) => s.createdAt.startsWith(today)).length >= PHOTOS_PER_DAY)
-    return res(429, { error: `${PHOTOS_PER_DAY} photos a day is the limit — try again tomorrow` })
+  // once, and how much can arrive in a day. Both ration a reviewer's attention,
+  // so neither applies to an admin, whose uploads go live without one.
+  if (!live) {
+    const mine = await allSubmissions({ attr: 'owner', value: claims.sub })
+    const photos = mine.filter((s) => s.data.type === 'photo')
+    if (photos.filter((s) => s.status === 'pending').length >= MAX_PENDING_PHOTOS)
+      return res(429, { error: `${MAX_PENDING_PHOTOS} of your photos are already waiting for review` })
+    const today = new Date().toISOString().slice(0, 10)
+    if (photos.filter((s) => s.createdAt.startsWith(today)).length >= PHOTOS_PER_DAY)
+      return res(429, { error: `${PHOTOS_PER_DAY} photos a day is the limit — try again tomorrow` })
+  }
 
   const id = randomUUID()
   const { ext } = checked
@@ -336,13 +354,26 @@ async function createPhoto(claims, event) {
         pk: { S: `sub#${id}` },
         owner: { S: claims.sub },
         email: { S: claims.email ?? '' },
-        status: { S: 'pending' },
+        status: { S: live ? 'approved' : 'pending' },
         createdAt: { S: createdAt },
+        ...(live ? { decidedAt: { S: createdAt } } : {}),
         data: { S: JSON.stringify(data) },
       },
     }),
   )
-  return res(200, { submission: { id, email: claims.email, status: 'pending', createdAt, data } })
+  const submission = {
+    id,
+    email: claims.email,
+    status: live ? 'approved' : 'pending',
+    createdAt,
+    ...(live ? { decidedAt: createdAt } : {}),
+    data,
+  }
+  if (live) {
+    await publishPhoto(id, data.photo)
+    await republishCommunity(submission)
+  }
+  return res(200, { submission })
 }
 
 /**
@@ -415,11 +446,16 @@ async function unpublishPhoto(photo) {
 /**
  * Rebuild data/community.json from every approved submission (oldest decision
  * first, so a later approval on the same target wins) and publish it.
+ *
+ * `extra` is the submission this rebuild was triggered by, when that submission
+ * was written moments ago: the scan below is eventually consistent, so a
+ * just-approved item can be missing from it. Adding it here is what makes an
+ * admin's own contribution reliably live in the same request that created it.
  */
-async function republishCommunity() {
-  const approved = (await allSubmissions({ attr: 'status', value: 'approved' })).sort((a, b) =>
-    (a.decidedAt ?? '') < (b.decidedAt ?? '') ? -1 : 1,
-  )
+async function republishCommunity(extra) {
+  const approved = await allSubmissions({ attr: 'status', value: 'approved' })
+  if (extra && !approved.some((s) => s.id === extra.id)) approved.push(extra)
+  approved.sort((a, b) => ((a.decidedAt ?? '') < (b.decidedAt ?? '') ? -1 : 1))
   const overrides = {}
   const places = new Map()
   const deleted = new Set()
@@ -526,9 +562,11 @@ async function decideSubmission(claims, event) {
     else if (previous === 'approved') await unpublishPhoto(existingData.photo)
   }
   // Anything entering or leaving the approved set changes the published file.
-  if (action === 'approved' || previous === 'approved') await republishCommunity()
   const updated = await db.send(new GetItemCommand({ TableName: TABLE, Key: { pk: { S: `sub#${id}` } } }))
-  return res(200, { submission: toSubmission(updated.Item) })
+  const submission = toSubmission(updated.Item)
+  if (action === 'approved' || previous === 'approved')
+    await republishCommunity(action === 'approved' ? submission : undefined)
+  return res(200, { submission })
 }
 
 async function adminOverview() {

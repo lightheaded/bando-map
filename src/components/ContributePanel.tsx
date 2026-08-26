@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { toggleAddPlace, useAppStore } from '../state/store'
-import { useContribStore, useLocalChanges, refreshSubmissions } from '../state/contrib'
+import { useMarksStore } from '../state/marks'
+import { useContribStore, useLocalChanges, refreshSubmissions, type LocalChange } from '../state/contrib'
 import { postSubmission } from '../sync/api'
 import { syncEnabled } from '../sync/config'
 import { signIn } from '../sync/auth'
@@ -61,6 +62,50 @@ function StatusChip({ s }: { s: Submission }) {
 }
 
 /**
+ * Drop one row of "Your changes" — what that means depends on what the row is.
+ * A place of your own is the change, so it goes; a correction is reverted to
+ * the shared map's values; a queued deletion is withdrawn. Nothing here has
+ * left the device yet, so every one of them is undoable from the toast.
+ */
+function useDiscardChange(): (c: LocalChange) => void {
+  const showToast = useAppStore((s) => s.showToast)
+  const select = useAppStore((s) => s.select)
+
+  return (c: LocalChange) => {
+    const { marks, places, setMark, removePlace, restorePlace } = useMarksStore.getState()
+    const mark = marks[c.targetId]
+    if (c.type === 'place') {
+      const place = places.find((p) => p.id === c.targetId)
+      if (!place) return
+      if (useAppStore.getState().selectedId === c.targetId) select(undefined)
+      removePlace(c.targetId)
+      showToast(`Deleted "${place.name}"`, { label: 'Undo', onClick: () => restorePlace(place, mark) })
+      return
+    }
+    if (c.type === 'delete') {
+      setMark(c.targetId, { remove: undefined })
+      showToast('Deletion withdrawn', {
+        label: 'Undo',
+        onClick: () => setMark(c.targetId, { remove: mark?.remove }),
+      })
+      return
+    }
+    setMark(c.targetId, { fix: undefined, edits: undefined })
+    showToast('Correction reverted', {
+      label: 'Undo',
+      onClick: () => setMark(c.targetId, { fix: mark?.fix, edits: mark?.edits }),
+    })
+  }
+}
+
+/** What the trash button on a row does, spelled out before it is pressed. */
+const DISCARD_LABEL = {
+  place: 'Delete this place',
+  edit: 'Revert this correction',
+  delete: 'Withdraw this deletion request',
+} as const
+
+/**
  * Community sourcing: add a place, review what you've changed locally, submit
  * it for admin approval, and follow what happened to past submissions —
  * always with a visible status and a reason on rejections, never a black
@@ -72,10 +117,14 @@ export function ContributePanel() {
   const placeDraft = useAppStore((s) => s.placeDraft)
   const showToast = useAppStore((s) => s.showToast)
   const email = useAppStore((s) => s.sync.email)
+  // An admin's own contributions skip the queue — the panel must not promise a
+  // review that will not happen.
+  const admin = useAppStore((s) => s.sync.admin)
   const changes = useLocalChanges()
   const submissions = useContribStore((s) => s.submissions)
   const online = useOnline()
   const select = useAppStore((s) => s.select)
+  const discard = useDiscardChange()
   const [excluded, setExcluded] = useState<Set<number>>(new Set())
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -102,11 +151,12 @@ export function ContributePanel() {
   const submit = async () => {
     setSubmitting(true)
     let sent = 0
+    let live = 0
     try {
       // One atomic submission per place, so a rejection never drags down
       // unrelated good edits.
       for (const c of selected) {
-        await postSubmission({
+        const { submission } = await postSubmission({
           type: c.type,
           targetId: c.targetId,
           name: c.name,
@@ -116,11 +166,13 @@ export function ContributePanel() {
           note: [c.note, note.trim()].filter(Boolean).join(' — ') || undefined,
         })
         sent++
+        if (submission.status === 'approved') live++
       }
       setNote('')
-      showToast(`Submitted ${sent} change${sent === 1 ? '' : 's'} for review`)
+      const plural = sent === 1 ? '' : 's'
+      showToast(live === sent ? `Published ${sent} change${plural}` : `Submitted ${sent} change${plural} for review`)
     } catch {
-      showToast(sent ? `Submitted ${sent}, then failed — try again for the rest` : 'Submitting failed — try again')
+      showToast(sent ? `Sent ${sent}, then failed — try again for the rest` : 'Submitting failed — try again')
     } finally {
       await refreshSubmissions()
       setSubmitting(false)
@@ -135,7 +187,10 @@ export function ContributePanel() {
         </div>
         <p className="offline-sub contrib-pitch">
           Bando Map is community-sourced: move mispinned spots, fix wrong details, add missing places, add your own
-          photos from a place's detail view. Submit your changes for review — approved ones go live on everyone's map.
+          photos from a place's detail view.{' '}
+          {admin
+            ? 'You review contributions, so your own changes publish straight to the map.'
+            : 'Submit your changes for review — approved ones go live on everyone\u2019s map.'}
         </p>
         <button className={`btn btn-small ${adding ? 'btn-active' : ''}`} onClick={toggleAddPlace}>
           {adding ? 'Cancel adding' : '+ Add a place'}
@@ -164,6 +219,14 @@ export function ContributePanel() {
                   >
                     <MapPinIcon />
                   </button>
+                  <button
+                    className="btn btn-small btn-icon btn-danger"
+                    title={DISCARD_LABEL[c.type]}
+                    aria-label={`${DISCARD_LABEL[c.type]}: ${c.name}`}
+                    onClick={() => discard(c)}
+                  >
+                    <TrashIcon />
+                  </button>
                 </div>
                 <span className="offline-sub">
                   {c.summary}
@@ -174,19 +237,27 @@ export function ContributePanel() {
           </ul>
           {email ? (
             <>
-              <input
-                className="contrib-note"
-                placeholder="Note for the reviewer (optional)"
-                value={note}
-                maxLength={500}
-                onChange={(e) => setNote(e.target.value)}
-              />
+              {!admin && (
+                <input
+                  className="contrib-note"
+                  placeholder="Note for the reviewer (optional)"
+                  value={note}
+                  maxLength={500}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              )}
               <button
                 className="btn btn-primary contrib-submit"
                 disabled={!online || submitting || !selected.length}
                 onClick={submit}
               >
-                {submitting ? 'Submitting…' : `Submit ${selected.length} for review`}
+                {submitting
+                  ? admin
+                    ? 'Publishing…'
+                    : 'Submitting…'
+                  : admin
+                    ? `Publish ${selected.length} to the map`
+                    : `Submit ${selected.length} for review`}
               </button>
             </>
           ) : (

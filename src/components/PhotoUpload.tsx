@@ -22,6 +22,8 @@ import type { Bando } from '../types'
  */
 export function PhotoUpload({ item }: { item: Bando }) {
   const email = useAppStore((s) => s.sync.email)
+  // An admin's uploads publish on arrival, so the button must not say "review".
+  const admin = useAppStore((s) => s.sync.admin)
   const showToast = useAppStore((s) => s.showToast)
   const submissions = useContribStore((s) => s.submissions)
   const online = useOnline()
@@ -59,7 +61,7 @@ export function PhotoUpload({ item }: { item: Bando }) {
     if (!prepared || !own) return
     setBusy(true)
     try {
-      await postPhoto({
+      const { submission } = await postPhoto({
         targetId: item.id,
         name: item.name,
         own: true,
@@ -68,7 +70,7 @@ export function PhotoUpload({ item }: { item: Bando }) {
         thumb: prepared.thumb,
       })
       reset()
-      showToast('Photo submitted for review')
+      showToast(submission.status === 'approved' ? 'Photo published' : 'Photo submitted for review')
       await refreshSubmissions()
     } catch {
       showToast('Upload failed — try again')
@@ -135,7 +137,7 @@ export function PhotoUpload({ item }: { item: Bando }) {
                 Cancel
               </button>
               <button className="btn btn-small btn-primary" onClick={send} disabled={busy || !own || !online}>
-                {busy ? 'Uploading…' : 'Submit for review'}
+                {busy ? 'Uploading…' : admin ? 'Publish' : 'Submit for review'}
               </button>
             </div>
           </div>

@@ -261,16 +261,30 @@ export function DetailContent() {
   const mark = useMarksStore((s) => (selectedId != null ? s.marks[selectedId] : undefined))
   const setMark = useMarksStore((s) => s.setMark)
   const [comment, setComment] = useState('')
+  /** True while the notes box has the focus, so a sync pull cannot overwrite
+   *  what is being typed. */
+  const [typingNote, setTypingNote] = useState(false)
   /** Correcting a place is a mode: Delete lives inside it rather than in the
    *  top bar, where it would sit armed next to every place all the time. */
   const [mode, setMode] = useState<'view' | 'edit' | 'delete'>('view')
   const editing = mode === 'edit'
   const deleting = mode === 'delete'
+  const storedComment = mark?.comment ?? ''
 
   useEffect(() => {
     setMode('view')
-    setComment(selectedId != null ? (useMarksStore.getState().marks[selectedId]?.comment ?? '') : '')
+    setTypingNote(false) // a selection can change without the box ever blurring
   }, [selectedId])
+
+  /**
+   * Follow the stored note, not just the selection. A note written on the
+   * phone lands here seconds after the panel opened — read once, the box would
+   * still hold the empty string it started with, and the next blur would write
+   * that emptiness over the note and sync the loss to every device.
+   */
+  useEffect(() => {
+    if (!typingNote) setComment(storedComment)
+  }, [storedComment, typingNote])
 
   const raw = bando ?? (place ? placeToBando(place) : undefined)
   const item = raw && resolveBando(raw, mark)
@@ -419,9 +433,10 @@ export function DetailContent() {
           ))}
         </div>
       )}
-      {/* A place still only on this device has an id nobody else knows, so
-          there is nothing to attach a photo to yet — submit the place first. */}
-      {mode === 'view' && shared && <PhotoUpload item={item} />}
+      {/* Any place can take a photo, a place of your own that has never been
+          submitted included: its id is fixed the moment it is created, so the
+          picture and the place can travel separately and still meet. */}
+      {mode === 'view' && <PhotoUpload item={item} />}
       <div className="coords-row">
         <code>{coords}</code>
         {mark?.fix && (
@@ -492,9 +507,11 @@ export function DetailContent() {
         placeholder="Notes — lines, obstacles, access… (searchable)"
         rows={2}
         value={comment}
+        onFocus={() => setTypingNote(true)}
         onChange={(e) => setComment(e.target.value)}
         onBlur={() => {
-          if (comment !== (mark?.comment ?? '')) setMark(item.id, { comment: comment || undefined })
+          setTypingNote(false)
+          if (comment !== storedComment) setMark(item.id, { comment: comment || undefined })
         }}
       />
       <div className="links">

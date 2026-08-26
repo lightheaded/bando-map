@@ -32,7 +32,8 @@ import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { useFilteredBandos, resolveBando, revealPlace } from '../state/filters'
 import { syncHashToSelection } from '../state/deeplink'
-import { HINT_SOURCES, PHOTO_URL, type Bando, type HintSourceId, type UserMark } from '../types'
+import { HINT_SOURCES, type Bando, type HintSourceId, type UserMark } from '../types'
+import { thumbGlyph, thumbUrl } from '../photos/thumb'
 
 const ESTONIA_BOUNDS: [number, number, number, number] = [21.5, 57.4, 28.3, 59.8]
 const VIEW_KEY = 'bando-map:view'
@@ -89,6 +90,20 @@ const statusColor = (mark?: UserMark) =>
         ? '#2563eb'
         : '#e11d48'
 
+/**
+ * Paint a marker's face, remembering what it is painted with. Community photos
+ * arrive with data/community.json, after the markers around them were already
+ * built — so a marker has to be able to change its face, not only take one.
+ */
+function applyMarkerFace(el: HTMLElement, b: Bando): void {
+  const face = thumbUrl(b)
+  if (el.dataset.face === face) return
+  el.dataset.face = face
+  el.style.backgroundImage = face ? `url(${face})` : ''
+  el.classList.toggle('no-photo', !face)
+  el.textContent = face ? '' : thumbGlyph(b)
+}
+
 // MapLibre positions the marker element with an inline transform, so the
 // scalable button lives inside a wrapper div that MapLibre owns.
 function buildPhotoMarkerEl(b: Bando): HTMLDivElement {
@@ -98,15 +113,7 @@ function buildPhotoMarkerEl(b: Bando): HTMLDivElement {
   el.type = 'button'
   el.className = 'photo-marker'
   el.title = b.name
-  const thumb = b.thumbs?.find(Boolean)
-  if (thumb) {
-    el.style.backgroundImage = `url(${import.meta.env.BASE_URL}${thumb})`
-  } else if (b.photos.length) {
-    el.style.backgroundImage = `url(${PHOTO_URL(b.photos[0])})`
-  } else {
-    el.classList.add('no-photo')
-    el.textContent = b.custom || b.community ? '★' : '▢'
-  }
+  applyMarkerFace(el, b)
   el.addEventListener('click', (e) => {
     e.stopPropagation()
     useAppStore.getState().select(b.id)
@@ -155,7 +162,9 @@ function syncPhotoMarkers(
     }
     const wrap = marker.getElement()
     wrap.classList.toggle('selected', id === selectedId)
-    ;(wrap.firstElementChild as HTMLElement).style.borderColor = statusColor(marks[id])
+    const el = wrap.firstElementChild as HTMLElement
+    el.style.borderColor = statusColor(marks[id])
+    applyMarkerFace(el, b) // a photo approved since the marker was built
   }
 }
 

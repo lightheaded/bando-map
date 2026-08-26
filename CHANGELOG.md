@@ -7,6 +7,48 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.6.0] — 2026-08-26
+
+### Added
+
+- **Photos can go on a place as it is created.** The New place form takes
+  pictures alongside the name. Before, the first picture of a new spot waited
+  out a whole review cycle: the place had to be submitted, approved and
+  published before the detail panel offered an upload. A place of your own now
+  accepts a photo from the moment it exists, in the form or from its detail
+  panel later. The pictures are prepared in the browser as before, so the
+  original's location data never leaves the device.
+
+- **An admin's own contributions publish straight to the map.** An admin is the
+  reviewer, so putting their edits, places, deletions and photos in the queue
+  only asked them to approve their own work. Such a submission is now approved
+  as it arrives and reaches every client in the same request. The panel says
+  *Publish*, not *Submit for review*, and drops the note-for-the-reviewer box.
+  The record is the same as a reviewed one, so a published change can still be
+  withdrawn from the Admin panel.
+
+- **A delete button on every row of "Your changes".** The card could only
+  unselect a row, which left it in the list. Each row now carries a trash button
+  beside the map-pin button. It deletes the local place, reverts the correction,
+  or withdraws the queued deletion — with an Undo in the toast, because nothing
+  in that card has left the device yet.
+
+### Fixed
+
+- **A user-added place shows its photo on the map and in the list.** A community
+  spot or a place of your own with an approved photo drew a star: the marker
+  read the register's thumbnails only, and a community photo is the sole picture
+  such a place ever has. Markers also kept the face they were built with, so a
+  photo arriving with `data/community.json` never reached one that already
+  stood on the map.
+
+- **Notes typed into the New place form no longer disappear.** The notes box in
+  the detail panel read the stored note once, when the selection changed. A note
+  that arrived seconds later — pushed from another device by sync — never
+  reached the box, and the next time the box lost focus it wrote its stale empty
+  value over the note and synced the loss everywhere. The box now follows the
+  stored note whenever it is not being typed in.
+
 ## [1.5.0] — 2026-08-26
 
 ### Changed

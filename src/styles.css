@@ -690,6 +690,70 @@ fieldset legend {
   flex-shrink: 0;
 }
 
+/* ----- Photos attached while a place is being created ----- */
+
+.add-place-photos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.add-place-photos .btn svg {
+  margin-right: 5px;
+  vertical-align: -2px;
+}
+
+/* A row of square previews that scrolls sideways: the form is 260px wide and
+   the number of photos is the contributor's to decide, not the layout's. */
+.photo-drafts {
+  list-style: none;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.photo-drafts li {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.photo-drafts img {
+  display: block;
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* Over the corner of its own thumbnail — one button per photo, and no room
+   beside a 72px square for it. */
+.photo-drafts .btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  padding: 2px 4px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.add-place-photos .checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.add-place-photos .checkbox input {
+  margin: 1px 0 0;
+  flex-shrink: 0;
+}
+
+.add-place-photos .checkbox span {
+  min-width: 0;
+}
+
 /* The reviewer sees the full-size render, not the thumbnail — a photo is judged
    at the size it will be published at. */
 .photo-review img {
@@ -959,6 +1023,9 @@ fieldset legend {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* Attached photos make this card as tall as the contributor wants it. */
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
 }
 
 @media (max-width: 640px) {
@@ -1010,7 +1077,9 @@ fieldset legend {
   color: #666;
 }
 
-.add-place-form input,
+/* Every text field in the form is full width — but not the licence checkbox,
+   which would stretch to the whole row and push its own label off the card. */
+.add-place-form input:not([type='checkbox']),
 .add-place-form textarea {
   width: 100%;
   border: 1px solid #d4d4d8;
@@ -1286,6 +1355,13 @@ fieldset legend {
   font-size: 13px;
   color: #1c1a1b;
   cursor: pointer;
+}
+
+/* Show-on-map and discard sit together at the end of the row: with the label
+   taking the slack, space-between can't push them apart. */
+.change-rows .offline-row > .checkbox {
+  flex: 1;
+  min-width: 0;
 }
 
 .change-rows > li > .offline-sub {

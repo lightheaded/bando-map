@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { useFilteredBandos } from '../state/filters'
-import { en, PHOTO_URL, type Bando, type TriageStatus } from '../types'
+import { en, type Bando, type TriageStatus } from '../types'
+import { thumbGlyph, thumbUrl } from '../photos/thumb'
 
 const STATUS_DOTS: Record<TriageStatus, string> = { new: '#e11d48', shortlisted: '#2563eb', rejected: '#71717a' }
 
@@ -36,17 +37,15 @@ export function PlacesList() {
         {items.map((b) => {
           const mark = marks[b.id]
           const status = mark?.status ?? 'new'
-          const thumb = b.thumbs?.find(Boolean)
+          const thumb = thumbUrl(b)
           return (
             <li key={b.id}>
               <button className="place-item" onClick={() => select(b.id)}>
                 {thumb ? (
-                  <img src={`${import.meta.env.BASE_URL}${thumb}`} alt="" loading="lazy" />
-                ) : b.photos.length ? (
-                  <img src={PHOTO_URL(b.photos[0])} alt="" loading="lazy" />
+                  <img src={thumb} alt="" loading="lazy" />
                 ) : (
                   <span className="no-photo" aria-hidden="true">
-                    {b.custom ? '★' : '▢'}
+                    {thumbGlyph(b)}
                   </span>
                 )}
                 <span className="place-text">
@@ -55,7 +54,7 @@ export function PlacesList() {
                     {b.name}
                   </span>
                   <span className="place-sub">
-                    {b.custom ? 'Custom place' : `${b.address}, ${b.municipality}`}
+                    {b.custom ? 'Custom place' : b.community ? 'Community spot' : `${b.address}, ${b.municipality}`}
                     {b.condition ? ` · ${en(b.condition)}` : ''}
                     {mark?.rating ? ` · ${'★'.repeat(mark.rating)}` : ''}
                   </span>
