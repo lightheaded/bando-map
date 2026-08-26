@@ -108,7 +108,7 @@ resource "aws_iam_role_policy" "sync_lambda" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Scan"]
+        Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Scan"]
         Resource = aws_dynamodb_table.sync.arn
       },
       {
@@ -123,11 +123,12 @@ resource "aws_iam_role_policy" "sync_lambda" {
         Resource = "${aws_s3_bucket.site.arn}/data/community.json"
       },
       # Photo uploads: park the renders for review, read them back for the
-      # reviewer, and publish or withdraw the approved copies. Deliberately two
-      # separate scopes — nothing here can touch the rest of the site bucket.
+      # reviewer, publish or withdraw the approved copies, and drop both renders
+      # when the contributor deletes the photo. Deliberately two separate scopes
+      # — nothing here can touch the rest of the site bucket.
       {
         Effect   = "Allow"
-        Action   = ["s3:PutObject", "s3:GetObject"]
+        Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
         Resource = "${aws_s3_bucket.photos.arn}/pending/*"
       },
       {
@@ -261,7 +262,7 @@ resource "aws_apigatewayv2_api" "sync" {
 
   cors_configuration {
     allow_origins = ["https://${var.domain}", "http://localhost:5173"]
-    allow_methods = ["GET", "PUT", "POST", "OPTIONS"]
+    allow_methods = ["GET", "PUT", "POST", "DELETE", "OPTIONS"]
     allow_headers = ["authorization", "content-type"]
     max_age       = 3600
   }
@@ -310,6 +311,7 @@ resource "aws_apigatewayv2_route" "community" {
     "POST /submissions",
     "POST /photos",
     "GET /photos/{id}",
+    "DELETE /photos/{id}",
     "GET /admin/overview",
     "POST /admin/submissions/{id}",
   ])

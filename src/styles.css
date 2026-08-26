@@ -617,6 +617,44 @@ fieldset legend {
   transform: scale(1.04);
 }
 
+/* A contributed photo of the user's own carries its own delete button, so the
+   picture is removed where it is looked at. The wrapper is what positions it —
+   the anchor inside keeps the hover zoom and the full-size link. */
+.detail-panel .photos .photo-tile {
+  position: relative;
+  flex-shrink: 0;
+  display: block;
+}
+
+.photo-delete {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  display: inline-flex;
+  padding: 4px;
+  border: 0;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 0.92);
+  color: #be123c;
+  cursor: pointer;
+}
+
+.photo-delete svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+
+/* Armed: the two answers replace the trash rather than sitting beside it, so
+   nothing is one mis-tap away from deleting a photo for good. */
+.photo-confirm {
+  position: absolute;
+  inset: auto 4px 4px 4px;
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
 /* A contributed photo says so, quietly — the corner badge is enough to tell it
    apart from the register's own without captioning every thumbnail. */
 .detail-panel .photos a.photo-community {
@@ -1404,6 +1442,44 @@ fieldset legend {
 .submission-rows .change-name {
   flex: 1;
   min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The whole row opens its place on the map. It is a button, so it must not look
+   like one — the row already reads as a row. */
+.submission-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.submission-open:hover:not(:disabled) .change-name {
+  text-decoration: underline;
+}
+
+/* Nothing left to open — the target went off the map. */
+.submission-open:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+/* Delete or keep, in the space the trash button had. */
+.row-confirm {
+  display: flex;
+  gap: 4px;
+  flex: none;
 }
 
 .sub-status {

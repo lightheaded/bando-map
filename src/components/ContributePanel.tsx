@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toggleAddPlace, useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { useContribStore, useLocalChanges, refreshSubmissions, type LocalChange } from '../state/contrib'
-import { postSubmission } from '../sync/api'
+import { deletePhoto, postSubmission } from '../sync/api'
 import { syncEnabled } from '../sync/config'
 import { signIn } from '../sync/auth'
 import { useOnline } from './useOnline'
@@ -125,9 +125,22 @@ export function ContributePanel() {
   const online = useOnline()
   const select = useAppStore((s) => s.select)
   const discard = useDiscardChange()
+  const dropCommunityPhoto = useAppStore((s) => s.dropCommunityPhoto)
+  const bandos = useAppStore((s) => s.bandos)
+  const places = useMarksStore((s) => s.places)
   const [excluded, setExcluded] = useState<Set<number>>(new Set())
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  /** Deleting a photo cannot be undone anywhere, so the trash arms and a second press confirms. */
+  const [confirmPhoto, setConfirmPhoto] = useState<string>()
+  const [deletingPhoto, setDeletingPhoto] = useState(false)
+
+  // A submission whose target left the map — an approved deletion, or a place
+  // added on another device — has nothing to open, so its row does not offer to.
+  const onMap = useMemo(
+    () => new Set([...bandos.map((b) => b.id), ...places.map((p) => p.id)]),
+    [bandos, places],
+  )
 
   useEffect(() => {
     if (open && email) refreshSubmissions()
@@ -139,6 +152,23 @@ export function ContributePanel() {
   // and both are cancelled by the same button.
   const adding = placeDraft != null
   const selected = changes.filter((c) => !excluded.has(c.targetId))
+
+  const removePhoto = async (s: Submission) => {
+    setDeletingPhoto(true)
+    try {
+      await deletePhoto(s.id)
+      // A published one is behind a CDN invalidation, so take it off this
+      // device's map straight away rather than waiting for the rebuilt file.
+      if (s.status === 'approved' && s.data.photo) dropCommunityPhoto(s.data.targetId, s.data.photo.file)
+      setConfirmPhoto(undefined)
+      showToast('Photo deleted')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Deleting the photo failed')
+    } finally {
+      await refreshSubmissions()
+      setDeletingPhoto(false)
+    }
+  }
 
   const toggleRow = (id: number) =>
     setExcluded((prev) => {
@@ -279,9 +309,40 @@ export function ContributePanel() {
           <ul className="submission-rows">
             {submissions.slice(0, 20).map((s) => (
               <li key={s.id}>
-                <KindIcon type={s.data.type} />
-                <span className="change-name">{s.data.name}</span>
-                <StatusChip s={s} />
+                <button
+                  className="submission-open"
+                  disabled={!onMap.has(s.data.targetId)}
+                  title={onMap.has(s.data.targetId) ? `Show ${s.data.name} on the map` : 'No longer on the map'}
+                  onClick={() => select(s.data.targetId)}
+                >
+                  <KindIcon type={s.data.type} />
+                  <span className="change-name">{s.data.name}</span>
+                  <StatusChip s={s} />
+                </button>
+                {s.data.type === 'photo' &&
+                  (confirmPhoto === s.id ? (
+                    <span className="row-confirm">
+                      <button
+                        className="btn btn-small btn-danger"
+                        disabled={deletingPhoto || !online}
+                        onClick={() => removePhoto(s)}
+                      >
+                        {deletingPhoto ? 'Deleting…' : 'Delete'}
+                      </button>
+                      <button className="btn btn-small btn-muted" onClick={() => setConfirmPhoto(undefined)}>
+                        Keep
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      className="btn btn-small btn-icon btn-danger"
+                      title="Delete this photo"
+                      aria-label={`Delete your photo of ${s.data.name}`}
+                      onClick={() => setConfirmPhoto(s.id)}
+                    >
+                      <TrashIcon />
+                    </button>
+                  ))}
               </li>
             ))}
           </ul>

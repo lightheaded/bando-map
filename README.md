@@ -28,7 +28,7 @@ The base map is Maa-amet's own tile service — the same detailed base map, orth
 - **Your own places** — add spots the register never had, with names and notes; they ride along in exports.
 - **Corrections** — drag a misplaced pin to where the building actually is (with undo), or fix the register fields themselves.
 - **Community sourcing** — submit those corrections for review; once approved they reach every visitor within seconds, no rescrape. Rejections always come with a reason. An admin is the reviewer, so their own contributions publish on submission.
-- **Contributed photos** — add your own photo of a place, in the New place form as you create it or from any place's detail panel: the register's pictures are often decades old, and a spot the community added has none at all. The browser downscales and re-encodes before uploading, which is also what removes the original's EXIF — the GPS tag where it was taken included. Every photo waits for review, and only your own work is accepted.
+- **Contributed photos** — add your own photo of a place, in the New place form as you create it or from any place's detail panel: the register's pictures are often decades old, and a spot the community added has none at all. The browser downscales and re-encodes before uploading, which is also what removes the original's EXIF — the GPS tag where it was taken included. Every photo waits for review, and only your own work is accepted. A photo of yours can be taken back at any point, published or still waiting.
 - **Cross-device sync (optional)** — sign in and your marks, notes, places and corrections follow you everywhere. Signed-out use is untouched: localStorage stays the source of truth.
 - **Offline-first** — installable, and everything you have browsed keeps working without signal. Save the current map view down to street level, or every spot photo, before heading somewhere remote.
 - **Deep links** — every spot has a shareable URL; if the receiver's dataset lacks that spot, the map flies to the coordinates instead.
@@ -81,7 +81,7 @@ Everything is disk-cached under `data/cache/` (gitignored) — delete it for a f
 - **Workflow**: triage spots online — *Shortlist* the promising ones, *Reject* the duds (hidden by default, recoverable via filters) — then mark them *Visited* in the field and rate 1–5 stars with notes. Marker colors: red = new, blue = shortlisted, green = visited, gray = rejected.
 - **Custom places**: add your own spots (name + notes, no photos) straight onto the map; they live in localStorage and ride along in exports.
 - **Corrections**: the *Move* tool repositions a wrong pin (with undo), the *Edit* tool corrects register fields (name, address, era, usage, condition). Corrections are stored as their own keys in the export. (*Copy fixes* in the filter panel still emits them as `data/overrides.json` content — the manual escape hatch.)
-- **Community sourcing**: the *Contribute* tab collects your shareable changes — moved pins, field edits, added places, and proposed deletions of places that are gone or never belonged (never personal state like shortlists or notes) — and submits each as its own reviewable item, with live status: pending with age, approved, or rejected *always with a reason*. Nothing in that card has left the device yet, so every row can also be dropped from it: the place goes, the correction reverts, the queued deletion is withdrawn — Undo in the toast. Approving in the *Admin* tab (admin accounts only: review queue with old→new diffs drawn on the map, usage stats, registered users, daily visits by country) republishes `data/community.json`, which every client merges over the dataset on load — corrections go live for everyone in seconds, no rescrape. The UX borrows deliberately: iD's unsaved-count badge, OSMCha's map-diff review, and one-item-per-submission + mandatory rejection reasons to avoid Google Maps' opaque-moderation trap.
+- **Community sourcing**: the *Contribute* tab collects your shareable changes — moved pins, field edits, added places, and proposed deletions of places that are gone or never belonged (never personal state like shortlists or notes) — and submits each as its own reviewable item, with live status: pending with age, approved, or rejected *always with a reason*. Nothing in that card has left the device yet, so every row can also be dropped from it: the place goes, the correction reverts, the queued deletion is withdrawn — Undo in the toast. Below it, *Your submissions* lists what has already gone: each row opens its place on the map, and a photo row can be deleted from there. Approving in the *Admin* tab (admin accounts only: review queue with old→new diffs drawn on the map, usage stats, registered users, daily visits by country) republishes `data/community.json`, which every client merges over the dataset on load — corrections go live for everyone in seconds, no rescrape. The UX borrows deliberately: iD's unsaved-count badge, OSMCha's map-diff review, and one-item-per-submission + mandatory rejection reasons to avoid Google Maps' opaque-moderation trap.
 - **Airspace (UAS zones)**: Estonia's official drone-restriction zones as their own layer, coloured by how much a zone actually restricts flight. Each entry keeps its vertical band and its message — the message is where a nominally unrestricted nature zone admits it needs a written permit, so colour alone would misrepresent it. The copy comes from `data/zones.json`, refreshed hourly by a Lambda rather than fetched from the browser (see [Airspace zones](#airspace-zones)); the app shows how fresh it is and links the official map, which stays the authority before a flight.
 - **Deep links**: selecting a spot puts `#b/<id>@<lat>,<lon>` in the URL — share it, and if the receiver doesn't have that spot, the map zooms to the coordinates instead.
 - **Offline (PWA)**: installable; everything browsed (app, dataset, photos, map tiles) is cached automatically and keeps working without signal. The Offline panel is transparent about storage — real byte counts per category, clearable — and lets you save the current map view down to street level, or all spot photos, before heading somewhere remote. Maa-amet serves CORS-clean tiles, so cached sizes are honest (no opaque-response padding).
@@ -102,7 +102,7 @@ history is readable without the board.
 
 ## Sync backend
 
-`infra/backend.tf` + `backend/handler.mjs`: Cognito user pool (Lite, hosted UI, email+password — Google federation can be added later) → API Gateway HTTP API with a JWT authorizer (unauthenticated requests never reach compute) → a single Lambda (arm64, Node 22, no build step) → DynamoDB on-demand at `api.bando.toom.as`. One sync document per user, plus community submissions in the same table (`pk=sub#<uuid>`; listing scans — at this scale that beats a GSI). Routes: `GET|PUT /sync`, `GET|POST /submissions`, `POST /photos` + `GET /photos/{id}`, and `GET /admin/overview` + `POST /admin/submissions/{id}` gated on membership of the `admin` Cognito group (see [Granting admin](#granting-admin)). Approvals rebuild `data/community.json` from all approved submissions and publish it to the site bucket + invalidate CloudFront; an approved deletion adds its id to that file's `deleted` list, which every client filters the dataset against. A submission whose author is in the `admin` group is approved as it arrives and rebuilds the file in the same request — the queue exists to hold work back until a reviewer trusts it, and an admin already is that reviewer. Deploys via `terraform -chdir=infra apply` (the handler zip is content-hashed). The SPA config (API URL, Cognito domain, client id — all public identifiers) lives in `src/sync/config.ts`.
+`infra/backend.tf` + `backend/handler.mjs`: Cognito user pool (Lite, hosted UI, email+password — Google federation can be added later) → API Gateway HTTP API with a JWT authorizer (unauthenticated requests never reach compute) → a single Lambda (arm64, Node 22, no build step) → DynamoDB on-demand at `api.bando.toom.as`. One sync document per user, plus community submissions in the same table (`pk=sub#<uuid>`; listing scans — at this scale that beats a GSI). Routes: `GET|PUT /sync`, `GET|POST /submissions`, `POST /photos` + `GET|DELETE /photos/{id}`, and `GET /admin/overview` + `POST /admin/submissions/{id}` gated on membership of the `admin` Cognito group (see [Granting admin](#granting-admin)). Approvals rebuild `data/community.json` from all approved submissions and publish it to the site bucket + invalidate CloudFront; an approved deletion adds its id to that file's `deleted` list, which every client filters the dataset against. A submission whose author is in the `admin` group is approved as it arrives and rebuilds the file in the same request — the queue exists to hold work back until a reviewer trusts it, and an admin already is that reviewer. Deploys via `terraform -chdir=infra apply` (the handler zip is content-hashed). The SPA config (API URL, Cognito domain, client id — all public identifiers) lives in `src/sync/config.ts`.
 
 Everything scales to zero — cost details live in the [Cost](#cost) section below.
 
@@ -128,6 +128,16 @@ published photo never changes under its name) and lists the token in
 `data/community.json` under `photos`. Withdrawing an approval deletes them
 again. The review copy stays as the record of what was uploaded until its
 180-day lifecycle rule expires it.
+
+A contributor can take their own photo back at any point, published or still
+waiting, from the trash button on the picture in a place's detail panel or on
+the row in Contribute → Your submissions. An admin can take back anybody's.
+`DELETE /photos/{id}` removes the published renders, the review copy and the
+submission record, and rebuilds `data/community.json` without it. There is no
+undo, so the button arms first and a second press confirms. The record is
+removed rather than marked, because there is no decision to keep: a rejection is
+a reviewer's verdict that the queue must remember, and this is the contributor
+changing their mind about their own picture.
 
 Per contributor: 20 photos a day, 30 waiting for review at once. The limits are
 not about cost — storage and processing here round to zero (see
@@ -250,8 +260,8 @@ Projected monthly cost per component, at idle and at ~5 daily active users (~3k 
 | DynamoDB (on-demand) | $0 | ~$0.07 | sync writes dominate (~25 KB doc = 25 WRU at $0.67/M); submission items, one stats item per day and admin scans are noise; storage ≪ 25 GB free |
 | Cognito (Lite) | $0 | $0 | free to 10,000 MAU; ListUsers API calls are free |
 | S3 (site + data + pdfs, ~1 GB) | ~$0.02 | ~$0.02 | storage; deploy PUTs and community.json publishes are fractions of a cent |
-| CloudFront | $0 | $0 | permanent free tier: 1 TB egress + 10M requests/month |
-| CloudFront invalidations | $0 | $0 | 1,000 free paths/month; one per deploy + one per submission approval |
+| CloudFront | $0 | $0 | permanent free tier: 1 TB egress + 10M requests/month. The app re-checks `sw.js` whenever it comes back into use (throttled to one a minute, see [Reaching an app that is already open](#reaching-an-app-that-is-already-open)) — a few hundred conditional GETs a month at 5 DAU, nearly all answered 304 |
+| CloudFront invalidations | $0 | $0 | 1,000 free paths/month; one per deploy, one per submission approval, one per deleted published photo |
 | CloudWatch logs (14 d retention) | $0 | <$0.01 | |
 | Access-log delivery (stats) | $0 | $0 | standard logging v2 to S3 carries no CloudFront or CloudWatch charge |
 | S3 access-log storage (stats) | $0 | <$0.02 | a trimmed 8-field record ≈ 200 B raw, gzipped on delivery — roughly 5–10 MB/month at this traffic. Grows until the seven-year expiry starts biting, topping out around 0.6 GB ≈ $0.015/mo; lower `stats_log_retention_days` to cap it sooner |
@@ -264,7 +274,7 @@ Projected monthly cost per component, at idle and at ~5 daily active users (~3k 
 | DynamoDB (zones meta + throttle) | $0 | <$0.01 | one meta write per run plus two counter writes per manual refresh |
 | API Gateway (POST /zones/refresh) | $0 | <$0.01 | capped at 10/hour globally ≈ 7,200/mo worst case at $1.06/M |
 | S3 storage (contributed photos) | $0 | <$0.01 | ~210 KB per approved photo (1600 px + 480 px webp), plus a review copy that expires after 180 days. 200 photos ≈ 42 MB ≈ $0.001/mo; even 5,000 ≈ 1 GB ≈ $0.024/mo |
-| Lambda + API Gateway (photo upload, preview, publish) | $0 | <$0.01 | two requests per upload plus one per review preview. No image decoding happens server-side — the browser resizes and re-encodes — so this is base64 decoding and S3 copies, far inside the free tier even at 1,000 uploads/month |
+| Lambda + API Gateway (photo upload, preview, publish, delete) | $0 | <$0.01 | two requests per upload, one per review preview, one per deletion. No image decoding happens server-side — the browser resizes and re-encodes — so this is base64 decoding and S3 copies, far inside the free tier even at 1,000 uploads/month |
 | CloudFront egress (contributed photos) | $0 | $0 | thumbnails are the same ~30 KB as the register's; a heavy 50-place session with community photos adds ~4 MB, so ~600 MB/month at 5 DAU against a **1 TB** permanent free tier. It would take ~250,000 such sessions a month to leave it |
 | **Total** | **≈ $0.02** | **≈ $0.14** | ~$1.85 even at 100 DAU |
 
@@ -331,6 +341,26 @@ git push --follow-tags
 Pushing the tag auto-creates a [GitHub Release](https://github.com/lightheaded/bando-map/releases)
 with that version's changelog section as notes (`.github/workflows/release.yml`).
 
+### Reaching an app that is already open
+
+A deploy does not reach an installed PWA on its own. A service worker learns
+that a new build exists only when something asks it to look, and an app sitting
+in the background asks nothing: its timers are throttled or frozen, and a
+standalone window does no navigation. The old bundle then keeps calling the new
+API, and the first sign of it is a request that fails for no visible reason.
+
+`src/sw/update.ts` asks again at every moment the app comes back into use — the
+tab becoming visible, the window taking focus, the network returning — and once
+more whenever a call to the API is refused, throttled to one check a minute. A
+new build raises the "New version ready" banner, which comes back hourly until
+it is taken. `src/main.tsx` also raises the banner on `controllerchange`: a
+worker that takes over a page where one already stood means the code running is
+the old build, whatever the reason the usual callback missed it.
+
+Deploy the backend before the app. Both halves must tolerate the other being a
+version behind for as long as it takes every client to reload, so add routes and
+fields rather than changing what the existing ones mean.
+
 ## Attribution & license
 
 - Building data: [Kultuurimälestiste register](https://register.muinas.ee/) (Muinsuskaitseamet), reused under Estonia's public information act
@@ -340,7 +370,7 @@ with that version's changelog section as notes (`.github/workflows/release.yml`)
   - OSM ruins: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL — kept as its own dataset (collective database), never merged record-by-record with other sources
   - Military heritage: [Eesti sõjaajaloo teejuht](https://teejuht.esap.ee/) (Eesti Sõjamuuseum / ESAP), used in good faith with attribution — spots link and preview their own [ESAP database](https://db.esap.ee/) record; the photos stay hot-linked from db.esap.ee, never copied into this project
   - Officially ownerless buildings: [Ametlikud Teadaanded](https://www.ametlikudteadaanded.ee/) (peremehetu ehitise hõivamise teated) — spots keep the announcing municipality's contact and link the original notice; last-known-owner names are not redistributed
-- Contributed photos: their photographers, who declare the photo their own work when they upload it and agree to it being published here. They are not part of this repository and are not offered for reuse; a photographer who wants one taken down should [open an issue](https://github.com/lightheaded/bando-map/issues) and a reviewer will withdraw the approval, which deletes it from the CDN
+- Contributed photos: their photographers, who declare the photo their own work when they upload it and agree to it being published here. They are not part of this repository and are not offered for reuse; a photographer who uploaded one can delete it themselves from the place's detail panel, and anyone else who wants one taken down should [open an issue](https://github.com/lightheaded/bando-map/issues) so that a reviewer can remove it
 - UAS geographical zones: [EANS Estonian drone map](https://utm.eans.ee/avm/) (Lennuliiklusteeninduse AS) — the official airspace feed, refetched hourly and shown with attribution and the age of our copy; advisory here, with the official map and NOTAMs remaining the authority before a flight
 
 The source code is [MIT-licensed](LICENSE). Register data and photos are not part of this repository and remain with their respective owners.

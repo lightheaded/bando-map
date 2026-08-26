@@ -2,6 +2,22 @@
 import type { Submission, SubmissionData } from '../types'
 import { SYNC } from './config'
 import { getIdToken } from './auth'
+import { checkForUpdate } from '../sw/update'
+
+/**
+ * A refused call, carrying what the API said about it. Every refusal answers
+ * with `{ error }`, and that sentence is written for the user: "20 photos a day
+ * is the limit" tells them what to do, where "POST /photos 429" does not.
+ */
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await getIdToken()
@@ -10,7 +26,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { authorization: `Bearer ${token}`, ...(init?.body ? { 'content-type': 'application/json' } : {}) },
   })
-  if (!res.ok) throw new Error(`${init?.method ?? 'GET'} ${path} ${res.status}`)
+  if (!res.ok) {
+    let reason = ''
+    try {
+      reason = ((await res.json()) as { error?: string }).error ?? ''
+    } catch {
+      /* not our error shape — the status has to speak for itself */
+    }
+    // An app running older code than the API it calls fails exactly like this,
+    // so a refusal is the moment to find out whether a new build is waiting.
+    checkForUpdate()
+    throw new ApiError(res.status, reason || `${init?.method ?? 'GET'} ${path} failed (${res.status})`)
+  }
   return res.json()
 }
 
@@ -32,6 +59,13 @@ export interface PhotoUpload {
 
 export const postPhoto = (body: PhotoUpload) =>
   request<{ submission: Submission }>('/photos', { method: 'POST', body: JSON.stringify(body) })
+
+/**
+ * Take a photo back: the contributor's own, or any of them for an admin. A
+ * pending one leaves the review queue, a published one also leaves the map.
+ * The stored renders go with it — there is no undo, and no copy left behind.
+ */
+export const deletePhoto = (id: string) => request<{ deleted: string }>(`/photos/${id}`, { method: 'DELETE' })
 
 /**
  * Both renders of a photo submission, base64. Pending photos are not on the CDN,

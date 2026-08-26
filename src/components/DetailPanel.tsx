@@ -1,8 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { EditIcon, MapPinIcon, TrashIcon } from './icons'
 import { PhotoUpload } from './PhotoUpload'
+import { useContribStore, refreshSubmissions } from '../state/contrib'
+import { deletePhoto } from '../sync/api'
 import { placeToBando, resolveBando } from '../state/filters'
 import { wgs84ToLest97 } from '../geo/lest97'
 import {
@@ -258,6 +260,10 @@ export function DetailContent() {
   const showToast = useAppStore((s) => s.showToast)
   const statusFilter = useAppStore((s) => s.filters.status)
   const communityPlaces = useAppStore((s) => s.community?.places)
+  // An admin can take down any contributed photo; anyone else, only their own.
+  const admin = useAppStore((s) => s.sync.admin)
+  const dropCommunityPhoto = useAppStore((s) => s.dropCommunityPhoto)
+  const photoSubmissions = useContribStore((s) => s.submissions)
   const mark = useMarksStore((s) => (selectedId != null ? s.marks[selectedId] : undefined))
   const setMark = useMarksStore((s) => s.setMark)
   const [comment, setComment] = useState('')
@@ -267,6 +273,9 @@ export function DetailContent() {
   /** Correcting a place is a mode: Delete lives inside it rather than in the
    *  top bar, where it would sit armed next to every place all the time. */
   const [mode, setMode] = useState<'view' | 'edit' | 'delete'>('view')
+  /** Deleting a photo cannot be undone anywhere, so the trash arms and a second press confirms. */
+  const [confirmPhoto, setConfirmPhoto] = useState<string>()
+  const [deletingPhoto, setDeletingPhoto] = useState(false)
   const editing = mode === 'edit'
   const deleting = mode === 'delete'
   const storedComment = mark?.comment ?? ''
@@ -286,6 +295,16 @@ export function DetailContent() {
     if (!typingNote) setComment(storedComment)
   }, [storedComment, typingNote])
 
+  /**
+   * A published photo's token is its submission id plus the extension, so the
+   * ids of the user's own photo submissions are enough to tell which tiles are
+   * theirs to remove — no extra call, and it works offline.
+   */
+  const myPhotoIds = useMemo(
+    () => new Set(photoSubmissions.filter((s) => s.data.type === 'photo').map((s) => s.id)),
+    [photoSubmissions],
+  )
+
   const raw = bando ?? (place ? placeToBando(place) : undefined)
   const item = raw && resolveBando(raw, mark)
   if (selectedId == null || !item) return null
@@ -295,6 +314,25 @@ export function DetailContent() {
   // was approved onto the shared map, where removing it needs review like any
   // register record or community spot.
   const shared = !item.custom || !!communityPlaces?.some((p) => p.id === item.id)
+  const photoId = (token: string) => token.replace(/\.\w+$/, '')
+  const canDeletePhoto = (token: string) => admin || myPhotoIds.has(photoId(token))
+
+  const removePhoto = async (token: string) => {
+    setDeletingPhoto(true)
+    try {
+      await deletePhoto(photoId(token))
+      // The rebuilt community.json is behind a CDN invalidation, so drop the
+      // photo here too — a deleted picture must leave the screen at once.
+      dropCommunityPhoto(item.id, token)
+      setConfirmPhoto(undefined)
+      showToast('Photo deleted')
+      await refreshSubmissions()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Deleting the photo failed')
+    } finally {
+      setDeletingPhoto(false)
+    }
+  }
   const coords = `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`
   // Moved pins and custom places have no (fresh) dataset L-EST97 coordinates —
   // project them from WGS84 so the XGIS link always works.
@@ -420,16 +458,41 @@ export function DetailContent() {
               they are the recent ones, and often the only ones for a place the
               register never held. */}
           {item.communityPhotos?.map((token) => (
-            <a
-              key={token}
-              className="photo-community"
-              href={COMMUNITY_PHOTO_URL(token)}
-              target="_blank"
-              rel="noreferrer"
-              title="Contributed photo — open full size"
-            >
-              <img src={COMMUNITY_PHOTO_URL(token, 'thumb')} alt={item.name} loading="lazy" />
-            </a>
+            <span key={token} className="photo-tile">
+              <a
+                className="photo-community"
+                href={COMMUNITY_PHOTO_URL(token)}
+                target="_blank"
+                rel="noreferrer"
+                title="Contributed photo — open full size"
+              >
+                <img src={COMMUNITY_PHOTO_URL(token, 'thumb')} alt={item.name} loading="lazy" />
+              </a>
+              {canDeletePhoto(token) &&
+                (confirmPhoto === token ? (
+                  <span className="photo-confirm">
+                    <button
+                      className="btn btn-small btn-danger"
+                      disabled={deletingPhoto}
+                      onClick={() => removePhoto(token)}
+                    >
+                      {deletingPhoto ? 'Deleting…' : 'Delete'}
+                    </button>
+                    <button className="btn btn-small btn-muted" onClick={() => setConfirmPhoto(undefined)}>
+                      Keep
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    className="photo-delete"
+                    title="Delete this photo"
+                    aria-label={`Delete this photo of ${item.name}`}
+                    onClick={() => setConfirmPhoto(token)}
+                  >
+                    <TrashIcon />
+                  </button>
+                ))}
+            </span>
           ))}
         </div>
       )}

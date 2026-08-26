@@ -7,6 +7,40 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.7.0] — 2026-08-26
+
+### Added
+
+- **A photo of yours can be deleted.** There was no way to take one back: an
+  upload was final, and only a reviewer rejecting the submission could remove
+  it. The trash button now sits on the picture in a place's detail panel and on
+  the row in Contribute → *Your submissions*, and it works on a published photo
+  as well as one still waiting for review. It removes the published copies, the
+  review copy and the record, and rebuilds the shared map without it. An admin
+  can take back anybody's. Deleting cannot be undone, so the button arms first
+  and a second press confirms.
+
+- **Every row of "Your submissions" opens its place on the map.** The card
+  listed what had been sent and what became of it, but a row led nowhere — the
+  place had to be found by hand. A row whose place is no longer on the map says
+  so instead of doing nothing.
+
+### Fixed
+
+- **The app now notices a new version when it comes back into use.** The
+  "New version ready" notice arrived late or not at all, which left the app
+  running old code against the updated backend — and the errors that follow.
+  The cause was where the check happened: only at load and on an hourly timer,
+  and an installed app in the background runs neither. It now re-checks
+  whenever the app becomes visible, takes focus, regains the network, or has a
+  request refused, and raises the notice as soon as a worker takes the page
+  over.
+
+- **A refused request says what was wrong.** Every failure read "try again",
+  including the ones where trying again is no use, such as reaching the limit
+  of 20 photos a day. The reason the backend gives is now shown. Refusals are
+  also logged server-side, so a failure that a user reports can be traced.
+
 ## [1.6.0] — 2026-08-26
 
 ### Added

@@ -72,8 +72,11 @@ export function PhotoUpload({ item }: { item: Bando }) {
       reset()
       showToast(submission.status === 'approved' ? 'Photo published' : 'Photo submitted for review')
       await refreshSubmissions()
-    } catch {
-      showToast('Upload failed — try again')
+    } catch (err) {
+      // The API refuses with a sentence written for the contributor ("20 photos
+      // a day is the limit"). Swallowing it for "try again" hides the one thing
+      // that tells them whether trying again is any use.
+      showToast(err instanceof Error ? err.message : 'Upload failed — try again')
     } finally {
       setBusy(false)
     }

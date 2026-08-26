@@ -2,8 +2,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import { useAppStore } from './state/store'
+import { trackRegistration, watchForUpdates } from './sw/update'
 import App from './App'
 import './styles.css'
+
+const offerUpdate = () => useAppStore.setState({ updateApp: () => window.location.reload() })
 
 registerSW({
   immediate: true,
@@ -11,14 +14,21 @@ registerSW({
   // it either way) — instead of the default forced reload, the UpdateBanner
   // shows (re-showing hourly after a dismissal) so the user reloads when it
   // suits them.
-  onNeedReload() {
-    useAppStore.setState({ updateApp: () => window.location.reload() })
-  },
-  // Installed PWAs can stay open for days — poll for new versions hourly.
+  onNeedReload: offerUpdate,
   onRegisteredSW(_url, registration) {
-    if (registration) setInterval(() => registration.update(), 60 * 60 * 1000)
+    trackRegistration(registration)
+    watchForUpdates()
   },
 })
+
+// Second route to the same banner. The callback above reaches this page only
+// through the worker instance registerSW made; a worker installed by another
+// tab, or by the browser's own check, can take this page over without it. A
+// controller arriving where one already stood means the code running here is
+// the old build, whatever the reason — and that is the whole thing to know.
+if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+  navigator.serviceWorker.addEventListener('controllerchange', offerUpdate)
+}
 
 // First-visit warm-up: the app fetches the dataset before the service worker
 // takes control, so that request bypasses the cache. Re-fetch through the SW

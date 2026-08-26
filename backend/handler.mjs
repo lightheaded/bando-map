@@ -39,7 +39,14 @@
  * hundred submissions, a few months of days) that beats a GSI.
  */
 import { randomUUID } from 'node:crypto'
-import { DynamoDBClient, GetItemCommand, PutItemCommand, UpdateItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb'
+import {
+  DynamoDBClient,
+  DeleteItemCommand,
+  GetItemCommand,
+  PutItemCommand,
+  UpdateItemCommand,
+  ScanCommand,
+} from '@aws-sdk/client-dynamodb'
 import { S3Client, PutObjectCommand, GetObjectCommand, CopyObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront'
 import { CognitoIdentityProviderClient, ListUsersCommand } from '@aws-sdk/client-cognito-identity-provider'
@@ -405,6 +412,39 @@ async function getPhoto(claims, event) {
   }
 }
 
+/**
+ * Take one photo back. A contributor can delete their own, an admin any of
+ * them. Nothing about it survives: a pending photo leaves the review queue, an
+ * approved one leaves the CDN and the rebuilt community.json as well, and the
+ * stored renders go in both cases — a withdrawn photo that stayed readable in
+ * the review bucket would not be withdrawn at all.
+ *
+ * The record is removed rather than marked, because there is no decision to
+ * keep. A rejection is a reviewer's verdict that the queue must remember; this
+ * is the contributor changing their mind about their own picture.
+ */
+async function deletePhoto(claims, event) {
+  const id = event.pathParameters?.id
+  if (!id) return res(400, { error: 'no id' })
+  const out = await db.send(new GetItemCommand({ TableName: TABLE, Key: { pk: { S: `sub#${id}` } } }))
+  if (!out.Item) return res(404, { error: 'no such submission' })
+  const data = JSON.parse(out.Item.data.S)
+  if (data.type !== 'photo') return res(404, { error: 'not a photo submission' })
+  if (out.Item.owner?.S !== claims.sub && !groups(claims).includes(ADMIN_GROUP)) return res(403, { error: 'not yours' })
+
+  const published = out.Item.status?.S === 'approved'
+  if (published) await unpublishPhoto(data.photo)
+  const ext = data.photo.file.split('.').pop()
+  await Promise.all(
+    ['full', 'thumb'].map((variant) =>
+      s3.send(new DeleteObjectCommand({ Bucket: PHOTO_BUCKET, Key: photoKey(id, ext, variant) })),
+    ),
+  )
+  await db.send(new DeleteItemCommand({ TableName: TABLE, Key: { pk: { S: `sub#${id}` } } }))
+  if (published) await republishCommunity(undefined, id)
+  return res(200, { deleted: id })
+}
+
 /** Copy an approved photo's renders to the site bucket, where CloudFront serves them. */
 async function publishPhoto(id, photo) {
   const ext = photo.file.split('.').pop()
@@ -447,13 +487,16 @@ async function unpublishPhoto(photo) {
  * Rebuild data/community.json from every approved submission (oldest decision
  * first, so a later approval on the same target wins) and publish it.
  *
- * `extra` is the submission this rebuild was triggered by, when that submission
- * was written moments ago: the scan below is eventually consistent, so a
- * just-approved item can be missing from it. Adding it here is what makes an
- * admin's own contribution reliably live in the same request that created it.
+ * The scan below is eventually consistent, so a submission written moments ago
+ * can be missing from it, and one deleted moments ago can still be in it. Both
+ * corrections are applied here: `extra` is the submission that triggered this
+ * rebuild, and `dropId` is the one that this rebuild exists to remove. Without
+ * them an admin's own contribution would not reliably go live, and a withdrawn
+ * photo would not reliably go away, in the request that asked for it.
  */
-async function republishCommunity(extra) {
-  const approved = await allSubmissions({ attr: 'status', value: 'approved' })
+async function republishCommunity(extra, dropId) {
+  let approved = await allSubmissions({ attr: 'status', value: 'approved' })
+  if (dropId) approved = approved.filter((s) => s.id !== dropId)
   if (extra && !approved.some((s) => s.id === extra.id)) approved.push(extra)
   approved.sort((a, b) => ((a.decidedAt ?? '') < (b.decidedAt ?? '') ? -1 : 1))
   const overrides = {}
@@ -688,11 +731,31 @@ function groups(claims) {
   return raw.replace(/^\[|\]$/g, '').split(/,\s*/).filter(Boolean)
 }
 
+/**
+ * A refused request is invisible otherwise: the client shows "try again" and
+ * CloudWatch holds nothing but a successful invocation, so nobody can say
+ * afterwards what was wrong. Route, status and our own message only — never the
+ * claims, and never a body, which on this API is a photo.
+ */
 export const handler = async (event) => {
+  const route = event.routeKey ?? `${event.requestContext?.http?.method} ${event.rawPath}`
+  const out = await dispatch(route, event)
+  if (out.statusCode >= 400) {
+    let reason = ''
+    try {
+      reason = JSON.parse(out.body).error ?? ''
+    } catch {
+      /* not our own error shape */
+    }
+    console.warn(`refused ${route}: ${out.statusCode} ${reason}`)
+  }
+  return out
+}
+
+const dispatch = async (route, event) => {
   const claims = event.requestContext?.authorizer?.jwt?.claims
   if (!claims?.sub) return res(401, { error: 'unauthenticated' })
 
-  const route = event.routeKey ?? `${event.requestContext?.http?.method} ${event.rawPath}`
   if (route.includes('/admin/') && !groups(claims).includes(ADMIN_GROUP)) {
     return res(403, { error: 'admin only' })
   }
@@ -710,6 +773,8 @@ export const handler = async (event) => {
       return createPhoto(claims, event)
     case 'GET /photos/{id}':
       return getPhoto(claims, event)
+    case 'DELETE /photos/{id}':
+      return deletePhoto(claims, event)
     case 'GET /admin/overview':
       return adminOverview()
     case 'POST /admin/submissions/{id}':

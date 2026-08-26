@@ -107,6 +107,13 @@ interface AppState {
   updateApp?: () => void
   setDataset: (d: BandoDataset) => void
   setCommunity: (c?: CommunityData) => void
+  /**
+   * Take one published photo out of the community data on this device, without
+   * waiting for the rebuilt file. The backend republishes community.json and
+   * invalidates it, but a CDN invalidation is not instant — and a photo the
+   * user just deleted must not still be on screen while that runs.
+   */
+  dropCommunityPhoto: (targetId: number, token: string) => void
   select: (id?: number) => void
   setBaseLayer: (l: BaseLayerId) => void
   showToast: (msg: string, action?: { label: string; onClick: () => void }) => void
@@ -179,6 +186,16 @@ export const useAppStore = create<AppState>((set) => ({
     }
     set((s) => ({ community, bandos: mergeCommunity(s.rawBandos, community) }))
   },
+  dropCommunityPhoto: (targetId, token) =>
+    set((s) => {
+      const left = s.community?.photos?.[targetId]?.filter((t) => t !== token)
+      if (!left) return {}
+      const photos = { ...s.community!.photos }
+      if (left.length) photos[targetId] = left
+      else delete photos[targetId]
+      const community = { ...s.community!, photos }
+      return { community, bandos: mergeCommunity(s.rawBandos, community) }
+    }),
   // Selecting a place also expands the mobile sheet, so the detail card shows.
   select: (id) => set((s) => ({ selectedId: id, sheetOpen: id != null ? true : s.sheetOpen })),
   setBaseLayer: (l) => {
