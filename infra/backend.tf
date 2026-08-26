@@ -5,8 +5,21 @@
 # Idle cost: $0.00/month. See README "Cost" for the load math.
 
 variable "api_domain" {
-  type    = string
-  default = "api.bando.toom.as"
+  description = "The address the sync API answers on."
+  type        = string
+  default     = "api.bando.toom.as"
+}
+
+# The API keeps answering on its old address as well, and for longer than the
+# site does. An installed PWA holds its own copy of the bundle, and that copy
+# has the old api_url compiled into it -- a redirect cannot save it, because a
+# 301 on a PUT is not something a browser replays with the body. So the old
+# name stays mapped to the same API and the same stage until the traffic on it
+# stops. It costs nothing: one extra custom domain on an HTTP API is free.
+variable "legacy_api_domain" {
+  description = "Retired API address, still mapped to the same API."
+  type        = string
+  default     = "api.bando.toom.as"
 }
 
 # Admins are members of the Cognito group below. Membership is granted
@@ -232,8 +245,11 @@ resource "aws_cognito_user_pool_client" "spa" {
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes                 = ["openid", "email"]
   supported_identity_providers         = ["COGNITO"]
-  callback_urls                        = ["https://bando.toom.as/", "http://localhost:5173/"]
-  logout_urls                          = ["https://bando.toom.as/", "http://localhost:5173/"]
+  # The old origin is still listed. An installed PWA served from it before the
+  # move keeps its own origin, and dropping the URL here would break sign-in
+  # for that copy with no way to tell the user why.
+  callback_urls = ["https://${var.domain}/", "https://${var.legacy_domain}/", "http://localhost:5173/"]
+  logout_urls   = ["https://${var.domain}/", "https://${var.legacy_domain}/", "http://localhost:5173/"]
 
   # USER_PASSWORD_AUTH is for curl/CI smoke tests; the app itself uses the
   # hosted UI with PKCE.
@@ -259,7 +275,7 @@ resource "aws_apigatewayv2_api" "sync" {
   tags          = { Component = "sync" }
 
   cors_configuration {
-    allow_origins = ["https://bando.toom.as", "http://localhost:5173"]
+    allow_origins = ["https://${var.domain}", "https://${var.legacy_domain}", "http://localhost:5173"]
     allow_methods = ["GET", "PUT", "POST", "OPTIONS"]
     allow_headers = ["authorization", "content-type"]
     max_age       = 3600
@@ -340,7 +356,12 @@ resource "aws_lambda_permission" "apigw" {
   source_arn    = "${aws_apigatewayv2_api.sync.execution_arn}/*/*"
 }
 
-# ----- Custom domain (api.bando.toom.as) -----
+# ----- Custom domain, live -----
+# Regional certificate, so it is issued here in eu-north-1, not us-east-1 like
+# the CloudFront one. Its validation record has the same problem as the site
+# certificate: the zone is not managed here, so the record has to be published
+# there separately. Read the value from the api_cert_validation_record output,
+# and see the long note in main.tf for the three-step apply.
 
 resource "aws_acm_certificate" "api" {
   domain_name       = var.api_domain
@@ -352,24 +373,12 @@ resource "aws_acm_certificate" "api" {
   }
 }
 
-resource "aws_route53_record" "api_cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.api.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      type   = dvo.resource_record_type
-      record = dvo.resource_record_value
-    }
-  }
-  zone_id = data.aws_route53_zone.main.zone_id
-  name    = each.value.name
-  type    = each.value.type
-  ttl     = 300
-  records = [each.value.record]
-}
-
 resource "aws_acm_certificate_validation" "api" {
-  certificate_arn         = aws_acm_certificate.api.arn
-  validation_record_fqdns = [for r in aws_route53_record.api_cert_validation : r.fqdn]
+  certificate_arn = aws_acm_certificate.api.arn
+  validation_record_fqdns = [
+    for dvo in aws_acm_certificate.api.domain_validation_options :
+    trimsuffix(dvo.resource_record_name, ".")
+  ]
 }
 
 resource "aws_apigatewayv2_domain_name" "api" {
@@ -389,13 +398,66 @@ resource "aws_apigatewayv2_api_mapping" "api" {
   stage       = aws_apigatewayv2_stage.default.id
 }
 
-resource "aws_route53_record" "api_a" {
+# ----- Custom domain, retired -----
+# Same API, same stage, second name. Both mappings are live at once, so a
+# client holding either address reaches the same handler and the same table.
+# Deleting this block is all that is needed to switch the old address off, and
+# nothing depends on it -- but read the note on var.legacy_api_domain first.
+
+resource "aws_acm_certificate" "legacy_api" {
+  domain_name       = var.legacy_api_domain
+  validation_method = "DNS"
+  tags              = { Component = "sync" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "legacy_api_cert_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.legacy_api.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      type   = dvo.resource_record_type
+      record = dvo.resource_record_value
+    }
+  }
   zone_id = data.aws_route53_zone.main.zone_id
-  name    = var.api_domain
+  name    = each.value.name
+  type    = each.value.type
+  ttl     = 300
+  records = [each.value.record]
+}
+
+resource "aws_acm_certificate_validation" "legacy_api" {
+  certificate_arn         = aws_acm_certificate.legacy_api.arn
+  validation_record_fqdns = [for r in aws_route53_record.legacy_api_cert_validation : r.fqdn]
+}
+
+resource "aws_apigatewayv2_domain_name" "legacy_api" {
+  domain_name = var.legacy_api_domain
+  tags        = { Component = "sync" }
+
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate_validation.legacy_api.certificate_arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+}
+
+resource "aws_apigatewayv2_api_mapping" "legacy_api" {
+  api_id      = aws_apigatewayv2_api.sync.id
+  domain_name = aws_apigatewayv2_domain_name.legacy_api.id
+  stage       = aws_apigatewayv2_stage.default.id
+}
+
+resource "aws_route53_record" "legacy_api_a" {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = var.legacy_api_domain
   type    = "A"
   alias {
-    name                   = aws_apigatewayv2_domain_name.api.domain_name_configuration[0].target_domain_name
-    zone_id                = aws_apigatewayv2_domain_name.api.domain_name_configuration[0].hosted_zone_id
+    name                   = aws_apigatewayv2_domain_name.legacy_api.domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.legacy_api.domain_name_configuration[0].hosted_zone_id
     evaluate_target_health = false
   }
 }
@@ -404,6 +466,25 @@ resource "aws_route53_record" "api_a" {
 
 output "api_url" {
   value = "https://${var.api_domain}"
+}
+
+output "legacy_api_url" {
+  value = "https://${var.legacy_api_domain}"
+}
+
+# The CNAME that must exist in the zone for the live API certificate to
+# validate. See cert_validation_record in main.tf.
+output "api_cert_validation_record" {
+  description = "ACM validation CNAME for var.api_domain; publish it in the zone."
+  value = {
+    for dvo in aws_acm_certificate.api.domain_validation_options :
+    trimsuffix(dvo.resource_record_name, ".") => trimsuffix(dvo.resource_record_value, ".")
+  }
+}
+
+# The CNAME target for api.bando.toom.as, also published in the zone.
+output "api_regional_domain" {
+  value = aws_apigatewayv2_domain_name.api.domain_name_configuration[0].target_domain_name
 }
 
 output "cognito_domain" {

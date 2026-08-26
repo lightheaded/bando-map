@@ -80,6 +80,22 @@ as the board, an issue never is.
   are obtained is deliberately not documented here; credentials never live in the repo
   or CI. The SPA-side ids live in `src/sync/config.ts`. Keep it $0 idle:
   on-demand/per-request services only, no provisioned capacity.
+- **Three names are deliberately stale — do not "fix" them.** The site moved from
+  `bando.toom.as` to `bando.toom.as` on 2026-08-26, and three things kept the old
+  name on purpose: the S3 buckets (`bando.toom.as`, `bando.toom.as-logs` — bucket
+  names are permanent, both are private, renaming means copying 387 MB), the retired
+  site address (its own CloudFront distribution, which 301s everything to the new one)
+  and the retired API address (`api.bando.toom.as`, still mapped to the same API for
+  installed PWAs that carry the old URL in their bundle). Each is commented where it
+  appears. A change that "tidies" one of them breaks something.
+- **DNS is managed outside this repository, and that makes certificates a two-step
+  apply.** The `toom.as` zone is not terraformed here, so terraform cannot publish its
+  own ACM validation records. Renewals need nothing — ACM re-uses the record. But
+  replacing `aws_acm_certificate.site` or `aws_acm_certificate.api` issues a **new**
+  validation record, and `terraform apply` then hangs for up to 45 minutes waiting for a
+  record this repo cannot create. The sequence is written at the top of `infra/main.tf`;
+  follow it, and don't cancel the apply thinking it is stuck.
+
 - **Cost projections are a living document.** The README "Cost" section holds per-component
   projections plus a running month-by-month Projected/Actual table. Any change that touches
   infra or usage patterns (new AWS resource, new API route, caching behavior, expected

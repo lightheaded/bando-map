@@ -56,7 +56,9 @@ locals {
 # ----- Log bucket -----
 
 resource "aws_s3_bucket" "logs" {
-  bucket = "${var.domain}-logs"
+  # var.bucket_name, not var.domain: this bucket keeps the name it was created
+  # with when the site lived at the old address. See the variable in main.tf.
+  bucket = "${var.bucket_name}-logs"
   tags   = { Component = "stats" }
 }
 

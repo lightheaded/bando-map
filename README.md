@@ -1,6 +1,7 @@
 # Bando Map
 
 **Live at [bando.toom.as](https://bando.toom.as)** — every push to `main` deploys automatically.
+The old address, `bando.toom.as`, permanently redirects here.
 
 A full-screen map of abandoned buildings ("bandos") in Estonia — potential FPV drone flying spots.
 
@@ -48,7 +49,7 @@ mkdir -p public/data
 curl -so public/data/bandos.json https://bando.toom.as/data/bandos.json
 ```
 
-Photos will 404 locally without `public/thumbs/` — run the scraper (below) or sync them from the bucket (`aws s3 sync s3://bando.toom.as/thumbs public/thumbs`, needs credentials) if you want them.
+Photos will 404 locally without `public/thumbs/` — run the scraper (below) or sync them from the bucket (`aws s3 sync s3://bando.toom.as/thumbs public/thumbs`, needs credentials) if you want them. The bucket name is the site's old address and stays that way: S3 names cannot be changed, and the bucket is private, so it never appears in a URL.
 
 ## Refreshing the data
 
@@ -265,6 +266,7 @@ Projected monthly cost per component, at idle and at ~5 daily active users (~3k 
 | S3 storage (contributed photos) | $0 | <$0.01 | ~210 KB per approved photo (1600 px + 480 px webp), plus a review copy that expires after 180 days. 200 photos ≈ 42 MB ≈ $0.001/mo; even 5,000 ≈ 1 GB ≈ $0.024/mo |
 | Lambda + API Gateway (photo upload, preview, publish) | $0 | <$0.01 | two requests per upload plus one per review preview. No image decoding happens server-side — the browser resizes and re-encodes — so this is base64 decoding and S3 copies, far inside the free tier even at 1,000 uploads/month |
 | CloudFront egress (contributed photos) | $0 | $0 | thumbnails are the same ~30 KB as the register's; a heavy 50-place session with community photos adds ~4 MB, so ~600 MB/month at 5 DAU against a **1 TB** permanent free tier. It would take ~250,000 such sessions a month to leave it |
+| CloudFront + function (old-address redirect) | $0 | $0 | a distribution costs nothing to exist. The function runs once per request to `bando.toom.as` at $0.10/M, and those requests share the same 1 TB / 10M free tier as the live site — a 301 with no body is about 300 B |
 | **Total** | **≈ $0.02** | **≈ $0.14** | ~$1.85 even at 100 DAU |
 
 One caveat those rows don't carry: `POST /zones/refresh` is the project's first unauthenticated
@@ -281,8 +283,11 @@ The one genuinely open-ended risk is somebody else hot-linking the *published* p
 exhaust the 1 TB CloudFront free tier, where overage runs ~$85/TB in Europe; the budget alarm would
 catch that long before a bill, and a Referer check is the fix if it ever happens.
 
-Excluded: the Route53 hosted zone ($0.50/mo) — `toom.as` is a pre-existing personal zone shared
-with other projects.
+Excluded: DNS. `bando.toom.as` is served by Cloudflare on a free plan, and the Route53 zone
+($0.50/mo) that still answers for the retired `bando.toom.as` is a pre-existing personal zone
+shared with other projects. The redirect adds a second CloudFront distribution and a CloudFront
+Function, both of which cost nothing until they are used and $0.10 per million requests after
+that — rounding error against the traffic the old address still gets.
 
 Running record — add a row when a month starts, fill Actual from Cost Explorer
 (filter `Project=bando-map`) after it closes, never rewrite past rows:
@@ -290,11 +295,28 @@ Running record — add a row when a month starts, fill Actual from Cost Explorer
 | Month | Projected | Actual | Notes |
 |---|---|---|---|
 | 2026-08 | ~$0.05 | | sync launched + community review shipped mid-month, visit stats and the hourly airspace fetcher late in the month; a few users at most |
-| 2026-09 | ~$0.14 | | first full month with accounts + submissions + contributed photos + visit stats + hourly zones, assuming ~5 DAU |
+| 2026-09 | ~$0.14 | | first full month with accounts + submissions + contributed photos + visit stats + hourly zones, assuming ~5 DAU; also the first full month on bando.toom.as, which adds nothing measurable |
 
 ## Deployment
 
 The app is a static site served from S3 behind CloudFront at **https://bando.toom.as**.
+
+The site moved to this address on 2026-08-26. The previous address still works: it has its own
+CloudFront distribution whose only job is to answer every request with a 301 to the same path on
+the new one. Two things did **not** move, on purpose:
+
+- **The S3 buckets keep their original names** (`bando.toom.as`, `bando.toom.as-logs`). Bucket
+  names are global and permanent, both buckets are private, and renaming them would mean copying
+  387 MB and re-pointing the deploy workflow for a cosmetic gain. See `var.bucket_name`.
+- **The API still answers on `api.bando.toom.as` as well.** An installed PWA carries its own copy
+  of the bundle with the old API URL compiled in, and a redirect cannot rescue a `PUT`. Both custom
+  domains map to the same API and the same stage.
+
+`bando.toom.as` DNS is **not** in this repo — the zone is managed elsewhere, so terraform here cannot
+publish its own ACM validation records. The sequence that puts them in place is written at the top of
+[`infra/main.tf`](infra/main.tf). Read it before touching `aws_acm_certificate.site` or
+`aws_acm_certificate.api`, because replacing either one makes `terraform apply` hang for up to 45
+minutes waiting for a DNS record this repo cannot create.
 
 - `infra/` holds the Terraform/OpenTofu stack: private S3 origin (OAC), CloudFront with SPA fallback, ACM certificate, Route53 records, and a GitHub-OIDC deploy role — no long-lived AWS keys anywhere. Apply locally: `cd infra && terraform apply` (uses ambient AWS credentials, or pass `-var aws_profile=...`). State is local and gitignored.
 - `.github/workflows/deploy.yml` builds and syncs `dist/` to S3 on every push to `main` (hashed assets get immutable caching; the HTML shell revalidates), then invalidates CloudFront. It authenticates by assuming the OIDC role from repo variables `AWS_DEPLOY_ROLE_ARN`, `S3_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID`. The dataset, thumbnails and PDF archive under `/data/`, `/thumbs/` and `/pdfs/` are published out-of-band (`npm run publish-data`) and deploys never touch them.

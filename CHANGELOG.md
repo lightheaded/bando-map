@@ -7,6 +7,21 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.5.0] — 2026-08-26
+
+### Changed
+
+- **The map lives at [bando.toom.as](https://bando.toom.as).** `toom.as` is the
+  domain for work meant to be read by anyone, which is what this map is.
+- **Old links still work.** The previous address now answers every request with a
+  permanent redirect to the same path on the new one, query string included. The
+  redirect runs on its own CloudFront distribution, so the live site keeps a hot
+  path with nothing in front of it.
+- **The sync API moved to `api.bando.toom.as`, and kept its previous address too.**
+  An installed copy of the app carries the old URL compiled into its bundle, and a
+  redirect cannot rescue a `PUT` — so both names map to the same API for as long
+  as anything still uses the old one.
+
 ## [1.4.0] — 2026-08-19
 
 ### Added
