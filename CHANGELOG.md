@@ -11,16 +11,14 @@ history — the dates are the real commit dates.
 
 ### Changed
 
-- **The map lives at [bando.toom.as](https://bando.toom.as).** `toom.as` is the
-  domain for work meant to be read by anyone, which is what this map is.
-- **Old links still work.** The previous address now answers every request with a
-  permanent redirect to the same path on the new one, query string included. The
-  redirect runs on its own CloudFront distribution, so the live site keeps a hot
-  path with nothing in front of it.
-- **The sync API moved to `api.bando.toom.as`, and kept its previous address too.**
-  An installed copy of the app carries the old URL compiled into its bundle, and a
-  redirect cannot rescue a `PUT` — so both names map to the same API for as long
-  as anything still uses the old one.
+- **The map lives at [bando.toom.as](https://bando.toom.as), and the sync API at
+  `api.bando.toom.as`.** `toom.as` is the domain for work meant to be read by
+  anyone, which is what this map is.
+- **The previous address is gone, not redirected.** Links to it no longer resolve.
+  An installed copy of the app that still calls the old API address will fail to
+  sync until it picks up this build; the map itself keeps working offline.
+- **The buckets are named for the project** (`bando-map-site`, `bando-map-logs`)
+  rather than for an address, so a future move costs no data copy.
 
 ## [1.4.0] — 2026-08-19
 
@@ -269,7 +267,7 @@ localStorage as the source of truth.
 - Coordinates extracted from register PDFs (much better pin accuracy), links
   to the PDF archive, chip icons.
 - CloudFront cost guard.
-- Moved to https://bando.toom.as.
+- Moved to its own domain.
 
 ## [0.6.0] — 2026-08-11
 

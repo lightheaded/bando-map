@@ -8,11 +8,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Not a typo, and not the site address. The bucket keeps the name it was created
-# with, before the site moved to bando.toom.as; S3 bucket names cannot be
-# changed, and this one is private (CloudFront-only), so it never appears in a
-# URL. See var.bucket_name in infra/main.tf.
-BUCKET="${BUCKET:-bando.toom.as}"
+# Not the site address, deliberately. A bucket name is global and permanent, so
+# it is not tied to whatever address the site answers on. This bucket is private
+# (CloudFront-only via OAC) and never appears in a URL. See var.bucket_name in
+# infra/main.tf.
+BUCKET="${BUCKET:-bando-map-site}"
 
 [ -f public/data/bandos.json ] || {
   echo "public/data/bandos.json missing — run 'npm run scrape' first" >&2

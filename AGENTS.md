@@ -30,6 +30,28 @@ Issue and card bodies are world-readable. Keep personal identifiers, private hos
 internal paths from other repos, and anything credential-shaped out of them — see the
 secret rules below.
 
+## ⚠️ This repository is public. Nothing about the operator's private infrastructure goes in it.
+
+Not in code, not in a comment, not in a commit message, not in an issue, a PR or a
+board card. Specifically **never** write:
+
+- the name of any other repository, or what it is for;
+- any domain or hostname other than this project's own public ones;
+- directory layouts, file paths, tool choices or state locations belonging to anything
+  outside this repository;
+- anything that describes *where* DNS, secrets or state are managed. "Managed outside
+  this repository" is the whole sentence. Detail that a maintainer needs belongs in the
+  private repository that owns the thing, not here.
+
+**Assume every commit is permanent.** A force push does **not** remove a commit from
+GitHub: the old SHA stays readable through the API and the web UI until GitHub Support
+runs garbage collection, and the push event — commit message included — is already in
+the public events feed and its public archives. There is no clean undo. The only control
+that works is not writing it in the first place.
+
+This happened once, on 2026-08-26, and cost a force push, a deleted release, a deleted
+issue and a support ticket.
+
 The board is fully scriptable (this is the expected interface for agents):
 
 ```sh
@@ -80,14 +102,10 @@ as the board, an issue never is.
   are obtained is deliberately not documented here; credentials never live in the repo
   or CI. The SPA-side ids live in `src/sync/config.ts`. Keep it $0 idle:
   on-demand/per-request services only, no provisioned capacity.
-- **Three names are deliberately stale — do not "fix" them.** The site moved from
-  `bando.toom.as` to `bando.toom.as` on 2026-08-26, and three things kept the old
-  name on purpose: the S3 buckets (`bando.toom.as`, `bando.toom.as-logs` — bucket
-  names are permanent, both are private, renaming means copying 387 MB), the retired
-  site address (its own CloudFront distribution, which 301s everything to the new one)
-  and the retired API address (`api.bando.toom.as`, still mapped to the same API for
-  installed PWAs that carry the old URL in their bundle). Each is commented where it
-  appears. A change that "tidies" one of them breaks something.
+- **Buckets are named for the project, not for the address** (`bando-map-site`,
+  `bando-map-logs`). A bucket name is global and can never be changed, so it must not be
+  derived from `var.domain` — see `var.bucket_name`. Both are private, so neither name
+  ever appears in a URL.
 - **DNS is managed outside this repository, and that makes certificates a two-step
   apply.** The `toom.as` zone is not terraformed here, so terraform cannot publish its
   own ACM validation records. Renewals need nothing — ACM re-uses the record. But

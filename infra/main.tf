@@ -14,35 +14,21 @@ variable "domain" {
   default     = "bando.toom.as"
 }
 
-# The address the site answered on until 2026-08-26. It is kept alive on its
-# own CloudFront distribution, which 301s every request to var.domain, so
-# links and bookmarks published before the move still work. Retiring it means
-# deleting aws_cloudfront_distribution.legacy and its two Route53 records --
-# nothing else here depends on it.
-variable "legacy_domain" {
-  description = "Retired address, permanently redirected to var.domain."
-  type        = string
-  default     = "bando.toom.as"
-}
-
-# The zone that holds the LEGACY domain, and only that. var.domain lives under
-# toom.as, whose zone is not managed here -- see the certificate section below.
-variable "zone_name" {
-  description = "Route53 zone holding var.legacy_domain."
-  type        = string
-  default     = "toom.as"
-}
-
-# Bucket names are global and permanent, so both buckets keep the names they
-# were created with in April 2026, before the domain moved. Neither is public:
-# the site bucket is CloudFront-only via OAC and the log bucket is written by
-# the log-delivery service, so the stale domain in the name never appears in a
-# URL. Renaming them would mean copying 387 MB, re-pointing the deploy
-# workflow's S3_BUCKET variable and re-issuing the OAC, for a cosmetic gain.
+# Deliberately not derived from var.domain. A bucket name is global and can
+# never be changed, so tying it to an address means a 387 MB copy every time
+# the address moves. Neither bucket is public -- the site bucket is
+# CloudFront-only via OAC and the log bucket is written by the log-delivery
+# service -- so neither name ever appears in a URL.
 variable "bucket_name" {
-  description = "Site bucket. Keeps its original name; see the comment above."
+  description = "Site bucket, private, CloudFront-only via OAC."
   type        = string
-  default     = "bando.toom.as"
+  default     = "bando-map-site"
+}
+
+variable "logs_bucket_name" {
+  description = "CloudFront access-log bucket, private."
+  type        = string
+  default     = "bando-map-logs"
 }
 
 variable "aws_profile" {
@@ -90,10 +76,6 @@ provider "aws" {
   default_tags {
     tags = local.tags
   }
-}
-
-data "aws_route53_zone" "main" {
-  name = var.zone_name
 }
 
 # ---------- S3 (private, CloudFront-only via OAC) ----------
@@ -168,47 +150,10 @@ resource "aws_acm_certificate_validation" "site" {
   ]
 }
 
-# The legacy certificate covers the retired address only, and stays in Route53
-# where that zone still lives. It is what lets the redirect distribution
-# terminate TLS, so a visitor on an old link gets the 301 instead of a
-# certificate warning.
-
-resource "aws_acm_certificate" "legacy" {
-  provider          = aws.us_east_1
-  domain_name       = var.legacy_domain
-  validation_method = "DNS"
-  tags              = { Component = "site" }
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-resource "aws_route53_record" "legacy_cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.legacy.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      type   = dvo.resource_record_type
-      record = dvo.resource_record_value
-    }
-  }
-  zone_id = data.aws_route53_zone.main.zone_id
-  name    = each.value.name
-  type    = each.value.type
-  ttl     = 300
-  records = [each.value.record]
-}
-
-resource "aws_acm_certificate_validation" "legacy" {
-  provider                = aws.us_east_1
-  certificate_arn         = aws_acm_certificate.legacy.arn
-  validation_record_fqdns = [for r in aws_route53_record.legacy_cert_validation : r.fqdn]
-}
-
 # ---------- CloudFront ----------
 
 resource "aws_cloudfront_origin_access_control" "site" {
-  name                              = var.bucket_name
+  name                              = "bando-map-site"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
@@ -260,104 +205,6 @@ resource "aws_cloudfront_distribution" "site" {
     minimum_protocol_version = "TLSv1.2_2021"
   }
 }
-
-# ---------- Redirect for the retired address ----------
-# A second distribution rather than a second alias on the live one, for two
-# reasons. The live distribution keeps a hot path with no function on it, and
-# retiring the old address one day is then a delete of this block instead of
-# surgery on the distribution that serves everybody.
-
-resource "aws_cloudfront_function" "legacy_redirect" {
-  name    = "bando-map-legacy-redirect"
-  runtime = "cloudfront-js-2.0"
-  comment = "301 the retired address to the live one, path and query preserved"
-  publish = true
-  code    = templatefile("${path.module}/legacy-redirect.js", { target = var.domain })
-}
-
-resource "aws_cloudfront_distribution" "legacy" {
-  enabled         = true
-  is_ipv6_enabled = true
-  comment         = "bando-map redirect (${var.legacy_domain})"
-  aliases         = [var.legacy_domain]
-  price_class     = "PriceClass_100"
-  http_version    = "http2and3"
-  tags            = { Component = "site" }
-
-  # CloudFront refuses to serve one name from two distributions, so the live
-  # distribution has to drop this alias before this one can claim it. Nothing
-  # else here creates that ordering.
-  depends_on = [aws_cloudfront_distribution.site]
-
-  # Declared because a distribution must have an origin, and never reached:
-  # the viewer-request function answers every request itself. No OAC, and the
-  # bucket policy grants only the live distribution.
-  origin {
-    domain_name = aws_s3_bucket.site.bucket_regional_domain_name
-    origin_id   = "unused"
-
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "https-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
-  }
-
-  default_cache_behavior {
-    target_origin_id       = "unused"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD"]
-    cached_methods         = ["GET", "HEAD"]
-    # AWS managed CachingDisabled. The response depends on the path and the
-    # query, and computing it costs a fraction of a cent per million requests.
-    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
-
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.legacy_redirect.arn
-    }
-  }
-
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
-
-  viewer_certificate {
-    acm_certificate_arn      = aws_acm_certificate_validation.legacy.certificate_arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2021"
-  }
-}
-
-# ---------- DNS ----------
-# Only the retired address is served from here. The live address is a CNAME in
-# a zone this configuration does not manage -- see the certificate section above.
-
-resource "aws_route53_record" "legacy_a" {
-  zone_id = data.aws_route53_zone.main.zone_id
-  name    = var.legacy_domain
-  type    = "A"
-  alias {
-    name                   = aws_cloudfront_distribution.legacy.domain_name
-    zone_id                = aws_cloudfront_distribution.legacy.hosted_zone_id
-    evaluate_target_health = false
-  }
-}
-
-resource "aws_route53_record" "legacy_aaaa" {
-  zone_id = data.aws_route53_zone.main.zone_id
-  name    = var.legacy_domain
-  type    = "AAAA"
-  alias {
-    name                   = aws_cloudfront_distribution.legacy.domain_name
-    zone_id                = aws_cloudfront_distribution.legacy.hosted_zone_id
-    evaluate_target_health = false
-  }
-}
-
 # ---------- GitHub Actions OIDC deploy role ----------
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -488,12 +335,6 @@ output "url" {
   value = "https://${var.domain}"
 }
 
-output "legacy_url" {
-  value = "https://${var.legacy_domain}"
-}
-
-# The CNAME that must exist in the zone for the live certificate to validate.
-# Empty braces mean the certificate is already issued and the record is in place.
 output "cert_validation_record" {
   description = "ACM validation CNAME for var.domain; publish it in the zone."
   value = {
