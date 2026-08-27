@@ -3,6 +3,7 @@ import type { Submission, SubmissionData } from '../types'
 import { SYNC } from './config'
 import { getIdToken } from './auth'
 import { checkForUpdate } from '../sw/update'
+import { reportApiRefusal } from '../obs/sentry'
 
 /**
  * A refused call, carrying what the API said about it. Every refusal answers
@@ -36,6 +37,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     // An app running older code than the API it calls fails exactly like this,
     // so a refusal is the moment to find out whether a new build is waiting.
     checkForUpdate()
+    reportApiRefusal(init?.method ?? 'GET', path, res.status, reason)
     throw new ApiError(res.status, reason || `${init?.method ?? 'GET'} ${path} failed (${res.status})`)
   }
   return res.json()

@@ -25,7 +25,12 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # The token turns on source-map upload in vite.config.ts. Without it the
+      # build still succeeds, and Sentry stack traces stay minified.
       - run: npm run build
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -43,6 +48,7 @@ jobs:
             --delete \
             --exclude index.html --exclude "data/*" --exclude "thumbs/*" --exclude "pdfs/*" \
             --exclude sw.js --exclude manifest.webmanifest --exclude registerSW.js \
+            --exclude "*.map" \
             --cache-control "public,max-age=31536000,immutable"
           aws s3 cp dist/index.html "s3://${{ vars.S3_BUCKET }}/index.html" \
             --cache-control "public,max-age=60,must-revalidate"

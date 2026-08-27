@@ -1,10 +1,17 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import * as Sentry from '@sentry/react'
 import { registerSW } from 'virtual:pwa-register'
 import { useAppStore } from './state/store'
 import { trackRegistration, watchForUpdates } from './sw/update'
+import { initErrorReporting } from './obs/sentry'
+import { CrashScreen } from './components/CrashScreen'
 import App from './App'
 import './styles.css'
+
+// First line of the app: everything below here can fail, and a failure before
+// this call is a failure nobody hears about.
+initErrorReporting()
 
 const offerUpdate = () => useAppStore.setState({ updateApp: () => window.location.reload() })
 
@@ -55,8 +62,17 @@ document.addEventListener(
   { passive: true },
 )
 
-createRoot(document.getElementById('root')!).render(
+// React 19 hands root-level errors to these hooks. Without them React logs a
+// crash to a console nobody is reading and unmounts the tree, which is the
+// blank page the user sees.
+createRoot(document.getElementById('root')!, {
+  onUncaughtError: Sentry.reactErrorHandler(),
+  onCaughtError: Sentry.reactErrorHandler(),
+  onRecoverableError: Sentry.reactErrorHandler(),
+}).render(
   <StrictMode>
-    <App />
+    <Sentry.ErrorBoundary fallback={CrashScreen}>
+      <App />
+    </Sentry.ErrorBoundary>
   </StrictMode>,
 )

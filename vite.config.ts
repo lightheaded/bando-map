@@ -2,10 +2,20 @@ import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 
+/**
+ * Source maps go to Sentry only, and only from CI, where the auth token lives.
+ * Without them a stack trace names `Zn` in `index-MrZJcUmt.js`, which locates
+ * nothing. `hidden` emits the maps without pointing the browser at them, and
+ * the plugin deletes them again once they are uploaded — nothing reaches S3.
+ */
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
+
 export default defineConfig({
+  build: { sourcemap: sentryAuthToken ? 'hidden' : false },
   // Single source of truth for the version is package.json; releases tag the
   // matching commit as v<version> (see README "Versioning & releases").
   define: {
@@ -34,6 +44,10 @@ export default defineConfig({
       workbox: {
         clientsClaim: true,
         skipWaiting: true,
+        // The app's own maps go to Sentry and are deleted again. Workbox writes
+        // its own afterwards, and those would be the only files in dist that
+        // point a browser at a map the deploy never publishes.
+        sourcemap: false,
         // Precache only the app shell — dataset, thumbnails and tiles go into
         // named runtime caches the in-app Offline panel can show and clear.
         globPatterns: ['**/*.{js,css,html,svg}', 'pwa-*.png', 'apple-touch-icon.png'],
@@ -88,5 +102,15 @@ export default defineConfig({
         ],
       },
     }),
+    // After every other plugin, so it sees the final chunks.
+    !!sentryAuthToken &&
+      sentryVitePlugin({
+        org: 'personal-3tn',
+        project: 'bando-map',
+        authToken: sentryAuthToken,
+        // Must match the `release` that src/obs/sentry.ts reports.
+        release: { name: `bando-map@${pkg.version}` },
+        sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
+      }),
   ],
 })

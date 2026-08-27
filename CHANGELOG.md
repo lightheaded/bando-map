@@ -7,6 +7,30 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.8.0] — 2026-08-27
+
+### Added
+
+- **The app reports its own faults.** It used to tell nobody when it broke: a
+  crash inside a component left a blank page, and a refused request left a
+  message that only the person holding the phone ever saw. A photo upload
+  failed on 26 August and left nothing behind that named the cause. Crashes and
+  refused API calls now go to Sentry, tagged with the version that produced
+  them and the route that was refused. Stack traces name real files, because
+  the deploy uploads source maps to the matching release.
+
+- **A crash shows a page instead of nothing.** React unmounts the whole app
+  when nothing catches an error, which looked exactly like a failed load. The
+  app now says what happened, offers a reload and shows the id of the report.
+
+### Privacy
+
+- Nothing about the person using the app goes with a report. The signed-in
+  email address is never attached, events carry no user, the project stores no
+  IP address, and the query string is dropped from every URL — a login redirect
+  carries a one-time code, and no query this app uses is worth reporting.
+  Reporting is off in development. See "Error reporting" in the README.
+
 ## [1.7.0] — 2026-08-26
 
 ### Added

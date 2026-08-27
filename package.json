@@ -1,7 +1,7 @@
 {
   "name": "bando-map",
   "private": true,
-  "version": "1.7.0",
+  "version": "1.8.0",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -13,12 +13,14 @@
     "publish-data": "scripts/publish-data.sh"
   },
   "dependencies": {
+    "@sentry/react": "^10.71.0",
     "maplibre-gl": "^5.6.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
+    "@sentry/vite-plugin": "^5.4.0",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^26.2.0",
     "@types/proj4": "^2.5.6",

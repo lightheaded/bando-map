@@ -32,7 +32,7 @@ The base map is Maa-amet's own tile service — the same detailed base map, orth
 - **Cross-device sync (optional)** — sign in and your marks, notes, places and corrections follow you everywhere. Signed-out use is untouched: localStorage stays the source of truth.
 - **Offline-first** — installable, and everything you have browsed keeps working without signal. Save the current map view down to street level, or every spot photo, before heading somewhere remote.
 - **Deep links** — every spot has a shareable URL; if the receiver's dataset lacks that spot, the map flies to the coordinates instead.
-- **No tracking** — no analytics script, no cookie, no third party. Usage figures are aggregate daily counts derived from the CDN's own access logs (see [Visit stats](#visit-stats)).
+- **No tracking** — no analytics script and no cookie. Usage figures are aggregate daily counts derived from the CDN's own access logs (see [Visit stats](#visit-stats)). One third party sits in the bundle: Sentry, which receives a report when the app breaks and nothing at any other time — no identity, no page-by-page trail (see [Error reporting](#error-reporting)).
 
 ## Quick start
 
@@ -244,6 +244,54 @@ is rewritten on every run so its `checkedAt` stays honest about when we last loo
 is only invalidated when the zones themselves changed. Deploys via `terraform -chdir=infra apply`,
 NOT via the site workflow.
 
+## Error reporting
+
+The app reports its own faults to [Sentry](https://sentry.io), project `bando-map` in the EU
+region. Before this it told nobody: a crash inside a component left a blank page, and a refused
+API call left a toast that only the person in front of the screen ever saw. A photo upload failed
+on 26 August 2026 and left nothing behind that named the cause.
+
+Three things reach the project:
+
+- An error that nothing catches. React 19 hands these to the root error hooks in `src/main.tsx`.
+- A render error caught by the boundary around the app. The app then shows
+  [`src/components/CrashScreen.tsx`](src/components/CrashScreen.tsx) in place of a blank page,
+  with a reload button and the id of the report.
+- A refused API call, with its route, its status and the sentence the API answered with.
+  `reportApiRefusal` in [`src/obs/sentry.ts`](src/obs/sentry.ts) collapses the ids out of the
+  path, so every refusal of the same route groups into one issue instead of one issue per id.
+
+### What never reaches it
+
+- **Nothing from development.** `Sentry.init` runs with `enabled: import.meta.env.PROD`, so
+  `npm run dev` reports nothing.
+- **No identity.** `sendDefaultPii` is off, the signed-in email address is never attached, and
+  `beforeSend` deletes the user, the headers and the cookies from every event. The project also
+  has "Prevent Storing of IP Addresses" turned on. Sentry still derives a coarse region from the
+  connection at the moment it accepts an event, which is city-level and is not stored as an
+  address.
+- **No query strings.** A login redirect lands on `/?code=…`. That code is single-use and
+  short-lived, but it is a credential, so `beforeSend` drops the query from every URL it reports.
+  The hash stays, because it is the public deep link to a place.
+- **No request bodies.** Breadcrumbs record the method, the URL and the status of a call. Nothing
+  that a call carried goes with them.
+- **No failed requests from a device with no signal.** This app is built to be used without one,
+  so a failed fetch is a normal event and is filtered out by message. Refused API calls are
+  reported explicitly instead, which keeps the real failures visible without the noise.
+
+### Source maps and releases
+
+The SDK reports the version from `package.json` as the release, so an issue names the build it
+came from. The deploy workflow builds with `SENTRY_AUTH_TOKEN` in the environment, which turns on
+`@sentry/vite-plugin` in `vite.config.ts`: the build emits hidden source maps, uploads them to the
+matching release and deletes them again. Without the token the build still succeeds and stack
+traces stay minified — that is what a local `npm run build` does. No map is published: the plugin
+removes them, workbox is told not to write its own, and `--exclude "*.map"` in the S3 sync is the
+last line of defence.
+
+The SDK adds ~31 KB gzipped to the app bundle. It is precached with the rest of the shell, so it
+costs one download, not one per visit.
+
 ## Cost
 
 Every resource is tagged (`Project=bando-map`, `Component=site|sync|stats|zones|photos` — see `infra/main.tf`),
@@ -276,6 +324,7 @@ Projected monthly cost per component, at idle and at ~5 daily active users (~3k 
 | S3 storage (contributed photos) | $0 | <$0.01 | ~210 KB per approved photo (1600 px + 480 px webp), plus a review copy that expires after 180 days. 200 photos ≈ 42 MB ≈ $0.001/mo; even 5,000 ≈ 1 GB ≈ $0.024/mo |
 | Lambda + API Gateway (photo upload, preview, publish, delete) | $0 | <$0.01 | two requests per upload, one per review preview, one per deletion. No image decoding happens server-side — the browser resizes and re-encodes — so this is base64 decoding and S3 copies, far inside the free tier even at 1,000 uploads/month |
 | CloudFront egress (contributed photos) | $0 | $0 | thumbnails are the same ~30 KB as the register's; a heavy 50-place session with community photos adds ~4 MB, so ~600 MB/month at 5 DAU against a **1 TB** permanent free tier. It would take ~250,000 such sessions a month to leave it |
+| Sentry (Developer plan, not AWS) | $0 | $0 | 5,000 errors/month included. Errors only — tracing is off (`tracesSampleRate: 0`) and Session Replay is not installed. At 5 DAU the app must break thousands of times a month to leave the free tier, and the plan drops events rather than billing for them |
 | **Total** | **≈ $0.02** | **≈ $0.14** | ~$1.85 even at 100 DAU |
 
 One caveat those rows don't carry: `POST /zones/refresh` is the project's first unauthenticated
@@ -319,7 +368,7 @@ publish its own ACM validation records. The sequence that puts them in place is 
 minutes waiting for a DNS record this repo cannot create.
 
 - `infra/` holds the Terraform/OpenTofu stack: private S3 origin (OAC), CloudFront with SPA fallback, ACM certificate, Route53 records, and a GitHub-OIDC deploy role — no long-lived AWS keys anywhere. Apply locally: `cd infra && terraform apply` (uses ambient AWS credentials, or pass `-var aws_profile=...`). State is local and gitignored.
-- `.github/workflows/deploy.yml` builds and syncs `dist/` to S3 on every push to `main` (hashed assets get immutable caching; the HTML shell revalidates), then invalidates CloudFront. It authenticates by assuming the OIDC role from repo variables `AWS_DEPLOY_ROLE_ARN`, `S3_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID`. The dataset, thumbnails and PDF archive under `/data/`, `/thumbs/` and `/pdfs/` are published out-of-band (`npm run publish-data`) and deploys never touch them.
+- `.github/workflows/deploy.yml` builds and syncs `dist/` to S3 on every push to `main` (hashed assets get immutable caching; the HTML shell revalidates), then invalidates CloudFront. It authenticates by assuming the OIDC role from repo variables `AWS_DEPLOY_ROLE_ARN`, `S3_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID`. The repo secret `SENTRY_AUTH_TOKEN` turns on source-map upload (see [Error reporting](#error-reporting)); the build succeeds without it. The dataset, thumbnails and PDF archive under `/data/`, `/thumbs/` and `/pdfs/` are published out-of-band (`npm run publish-data`) and deploys never touch them.
 
 ## Versioning & releases
 

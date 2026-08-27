@@ -2135,3 +2135,42 @@ input[type='number']::-webkit-inner-spin-button {
   appearance: none;
   margin: 0;
 }
+
+/* ============ Crash screen ============ */
+/* Shown in place of the whole app when a render throws. `#root` is height:100%
+   with overflow hidden, so this centres itself inside it. */
+.crash {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  color: #333;
+}
+
+.crash h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.crash p {
+  font-size: 13px;
+  color: #52525b;
+  max-width: 42ch;
+}
+
+.crash-detail {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: #be123c;
+  overflow-wrap: anywhere;
+}
+
+.crash-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #a1a1aa;
+}
