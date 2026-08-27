@@ -50,6 +50,7 @@ import {
 import { S3Client, PutObjectCommand, GetObjectCommand, CopyObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront'
 import { CognitoIdentityProviderClient, ListUsersCommand } from '@aws-sdk/client-cognito-identity-provider'
+import { reporting } from './sentry.mjs'
 
 const db = new DynamoDBClient({})
 const s3 = new S3Client({})
@@ -737,7 +738,7 @@ function groups(claims) {
  * afterwards what was wrong. Route, status and our own message only — never the
  * claims, and never a body, which on this API is a photo.
  */
-export const handler = async (event) => {
+export const handler = reporting(async (event) => {
   const route = event.routeKey ?? `${event.requestContext?.http?.method} ${event.rawPath}`
   const out = await dispatch(route, event)
   if (out.statusCode >= 400) {
@@ -750,7 +751,7 @@ export const handler = async (event) => {
     console.warn(`refused ${route}: ${out.statusCode} ${reason}`)
   }
   return out
-}
+})
 
 const dispatch = async (route, event) => {
   const claims = event.requestContext?.authorizer?.jwt?.claims

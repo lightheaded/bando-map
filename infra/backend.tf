@@ -82,10 +82,21 @@ resource "aws_s3_bucket_lifecycle_configuration" "photos" {
 
 # ----- Lambda -----
 
+# Two files, so `source` blocks rather than `source_file`: the handler, and the
+# Sentry preload that Lambda runs before it (see infra/observability.tf).
 data "archive_file" "sync_handler" {
   type        = "zip"
-  source_file = "${path.module}/../backend/handler.mjs"
   output_path = "${path.module}/.terraform/tmp/sync-handler.zip"
+
+  source {
+    content  = file("${path.module}/../backend/handler.mjs")
+    filename = "handler.mjs"
+  }
+
+  source {
+    content  = file("${path.module}/../backend/sentry.mjs")
+    filename = "sentry.mjs"
+  }
 }
 
 resource "aws_iam_role" "sync_lambda" {
@@ -170,14 +181,14 @@ resource "aws_lambda_function" "sync" {
   tags             = { Component = "sync" }
 
   environment {
-    variables = {
+    variables = merge(local.lambda_sentry_env, {
       TABLE_NAME      = aws_dynamodb_table.sync.name
       ADMIN_GROUP     = aws_cognito_user_group.admin.name
       SITE_BUCKET     = aws_s3_bucket.site.bucket
       PHOTO_BUCKET    = aws_s3_bucket.photos.bucket
       DISTRIBUTION_ID = aws_cloudfront_distribution.site.id
       USER_POOL_ID    = aws_cognito_user_pool.users.id
-    }
+    })
   }
 
   depends_on = [aws_cloudwatch_log_group.sync_lambda]

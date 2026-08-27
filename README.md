@@ -246,12 +246,18 @@ NOT via the site workflow.
 
 ## Error reporting
 
-The app reports its own faults to [Sentry](https://sentry.io), project `bando-map` in the EU
-region. Before this it told nobody: a crash inside a component left a blank page, and a refused
-API call left a toast that only the person in front of the screen ever saw. A photo upload failed
-on 26 August 2026 and left nothing behind that named the cause.
+Both halves report their own faults to [Sentry](https://sentry.io), in the EU region and in two
+separate projects: `bando-map` for the browser, `bando-map-api` for the three Lambda functions.
+They stay apart on purpose — a render crash and a server fault share nothing but a release name,
+and one stream that mixes them groups neither well.
 
-Three things reach the project:
+Before this the project told nobody it had broken. A crash inside a component left a blank page,
+and a refused API call left a toast that only the person in front of the screen ever saw. A photo
+upload failed on 26 August 2026 and left nothing behind that named the cause.
+
+### The browser
+
+Three things reach the `bando-map` project:
 
 - An error that nothing catches. React 19 hands these to the root error hooks in `src/main.tsx`.
 - A render error caught by the boundary around the app. The app then shows
@@ -261,7 +267,7 @@ Three things reach the project:
   `reportApiRefusal` in [`src/obs/sentry.ts`](src/obs/sentry.ts) collapses the ids out of the
   path, so every refusal of the same route groups into one issue instead of one issue per id.
 
-### What never reaches it
+#### What never reaches the browser project
 
 - **Nothing from development.** `Sentry.init` runs with `enabled: import.meta.env.PROD`, so
   `npm run dev` reports nothing.
@@ -279,7 +285,7 @@ Three things reach the project:
   so a failed fetch is a normal event and is filtered out by message. Refused API calls are
   reported explicitly instead, which keeps the real failures visible without the noise.
 
-### Source maps and releases
+#### Source maps and releases
 
 The SDK reports the version from `package.json` as the release, so an issue names the build it
 came from. The deploy workflow builds with `SENTRY_AUTH_TOKEN` in the environment, which turns on
@@ -291,6 +297,61 @@ last line of defence.
 
 The SDK adds ~31 KB gzipped to the app bundle. It is precached with the rest of the shell, so it
 costs one download, not one per visit.
+
+### The API
+
+[`backend/sentry.mjs`](backend/sentry.mjs) is the whole of it: about eighty lines, one POST, no
+dependency. `reporting()` wraps each of the three handlers, so anything a handler throws is sent
+before the error leaves, and re-thrown untouched — the runtime still fails the invocation and
+CloudWatch still holds the full trace.
+
+An event carries the exception with real file names, line numbers and the five lines of source
+either side, the release, and the Lambda request id with a link straight to the log stream that
+holds the rest. Nothing needs a source map: the deployed file **is** the source file, so the
+reporter reads the surrounding lines back off disk.
+
+**Sentry's own SDK layer was tried here first and rejected on measurements**, which is worth
+knowing before anybody proposes it again:
+
+| | Cold start | Resident memory |
+|---|---|---|
+| Before either | ~0.5 s | ~126 MB |
+| Sentry SDK layer | ~1.8 s | ~199 MB |
+| `backend/sentry.mjs` | ~0.5 s | ~130 MB |
+
+Three cold runs each, on `bando-map-sync`. The memory number is what killed it: a photo upload had
+already peaked at 199 MB decoding base64, and another 70 MB on top clears the function's 256 MB, at
+which point Lambda kills the invocation. Reporting a fault is not worth causing one.
+
+What the layer gave and this does not: breadcrumbs, automatic capture of anything a handler does
+not await, and a warning as a timeout approaches. CloudWatch holds the console output already,
+every handler awaits everything it does, and a timeout shows in the duration metric.
+
+One trap is written down in the file itself, because it cost an hour to find. Had the layer stayed,
+the preload flag would have had to be `-r`, never `--import`: the SDK sits at
+`/opt/nodejs/node_modules`, Lambda exposes that through `NODE_PATH`, and `NODE_PATH` is a CommonJS
+mechanism that ESM resolution ignores.
+
+#### What never reaches the API project
+
+The event is built field by field in `eventBody`, and the API Gateway event is not one of the
+fields. That distinction matters here: every call carries an `authorization: Bearer` header, and
+the token inside it holds an email address. Nothing about the caller is sent — no request, no
+headers, no user — and the project stores no IP address.
+
+### Silence, which no SDK can report
+
+A function that stops being invoked throws nothing. That is the real failure mode of the two
+scheduled functions, and it is invisible: stale airspace data looks exactly like fresh airspace
+data until a pilot reads the age.
+
+So [`infra/observability.tf`](infra/observability.tf) adds a CloudWatch alarm to each. The airspace
+fetcher must run at least once in two hours, the visit-stats rollup at least once in twelve. Both
+report to an SNS topic. `Invocations` returns no data rather than zero when nothing ran, and
+`treat_missing_data = "breaching"` is what turns that silence into an alarm.
+
+Set `alert_email` to receive them. The same variable turns on the monthly cost budget, and no
+address is written down in this repository.
 
 ## Cost
 
@@ -304,7 +365,7 @@ Projected monthly cost per component, at idle and at ~5 daily active users (~3k 
 | Component | Idle | 5 DAU | Notes |
 |---|---|---|---|
 | API Gateway (HTTP API) | $0 | ~$0.004 | $1.06/M requests in eu-north-1 — sync, submissions and admin calls |
-| Lambda (arm64, 256 MB) | $0 | $0 | inside the permanent free tier (1M req + 400k GB-s) |
+| Lambda (arm64, 256 MB) | $0 | $0 | inside the permanent free tier (1M req + 400k GB-s). Error reporting adds one POST on the error path and about 4 MB resident, so the sizes are unchanged |
 | DynamoDB (on-demand) | $0 | ~$0.07 | sync writes dominate (~25 KB doc = 25 WRU at $0.67/M); submission items, one stats item per day and admin scans are noise; storage ≪ 25 GB free |
 | Cognito (Lite) | $0 | $0 | free to 10,000 MAU; ListUsers API calls are free |
 | S3 (site + data + pdfs, ~1 GB) | ~$0.02 | ~$0.02 | storage; deploy PUTs and community.json publishes are fractions of a cent |
@@ -324,7 +385,9 @@ Projected monthly cost per component, at idle and at ~5 daily active users (~3k 
 | S3 storage (contributed photos) | $0 | <$0.01 | ~210 KB per approved photo (1600 px + 480 px webp), plus a review copy that expires after 180 days. 200 photos ≈ 42 MB ≈ $0.001/mo; even 5,000 ≈ 1 GB ≈ $0.024/mo |
 | Lambda + API Gateway (photo upload, preview, publish, delete) | $0 | <$0.01 | two requests per upload, one per review preview, one per deletion. No image decoding happens server-side — the browser resizes and re-encodes — so this is base64 decoding and S3 copies, far inside the free tier even at 1,000 uploads/month |
 | CloudFront egress (contributed photos) | $0 | $0 | thumbnails are the same ~30 KB as the register's; a heavy 50-place session with community photos adds ~4 MB, so ~600 MB/month at 5 DAU against a **1 TB** permanent free tier. It would take ~250,000 such sessions a month to leave it |
-| Sentry (Developer plan, not AWS) | $0 | $0 | 5,000 errors/month included. Errors only — tracing is off (`tracesSampleRate: 0`) and Session Replay is not installed. At 5 DAU the app must break thousands of times a month to leave the free tier, and the plan drops events rather than billing for them |
+| Sentry (Developer plan, not AWS) | $0 | $0 | 5,000 errors/month across both projects. Errors only — tracing is off in the browser (`tracesSampleRate: 0`) and the API sends nothing but exceptions, and Session Replay is not installed. At 5 DAU the project must break thousands of times a month to leave the free tier, and the plan drops events rather than billing for them |
+| CloudWatch alarms | $0 | $0 | two, against a free allowance of ten |
+| SNS (alarm email) | $0 | $0 | 1,000 email notifications a month are free, and a healthy month sends none |
 | **Total** | **≈ $0.02** | **≈ $0.14** | ~$1.85 even at 100 DAU |
 
 One caveat those rows don't carry: `POST /zones/refresh` is the project's first unauthenticated

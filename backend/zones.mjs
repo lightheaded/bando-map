@@ -24,6 +24,7 @@
  * source's own fields through, it does not decide what counts as restrictive.
  */
 import { createHash, createHmac } from 'node:crypto'
+import { reporting } from './sentry.mjs'
 
 /**
  * The AWS clients load on first use rather than at module scope. The SDK ships
@@ -282,11 +283,11 @@ async function manualRefresh(event) {
 
 // ---------- entry ----------
 
-export const handler = async (event) => {
+export const handler = reporting(async (event) => {
   // API Gateway payload v2 carries requestContext.http; EventBridge does not.
   if (event?.requestContext?.http) {
     if (event.routeKey !== 'POST /zones/refresh') return res(405, { error: 'method not allowed' })
     return manualRefresh(event)
   }
   return refresh()
-}
+})

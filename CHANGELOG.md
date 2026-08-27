@@ -23,13 +23,34 @@ history — the dates are the real commit dates.
   when nothing catches an error, which looked exactly like a failed load. The
   app now says what happened, offers a reload and shows the id of the report.
 
+- **The API reports its faults too**, into its own project. All three Lambda
+  handlers are wrapped, so anything one throws is sent before the error leaves,
+  with real file names, line numbers, the source either side, and a link to the
+  log stream that holds the rest. It costs about eighty lines, one POST on the
+  error path and roughly 4 MB — cold starts and function sizes are unchanged.
+  Sentry's own SDK layer was measured here first and rejected: it added 1.3 s
+  to every cold start and 70 MB of memory, which together with a photo upload's
+  199 MB peak would have cleared the function's limit and killed the upload.
+
+- **The two scheduled functions raise an alarm when they stop running.** No
+  error reporter can see this, because a function that never runs throws
+  nothing — and stale airspace data looks exactly like fresh airspace data
+  until a pilot reads the age. The airspace fetcher must now run once in two
+  hours and the visit-stats rollup once in twelve. Set `alert_email` in the
+  Terraform variables to receive them.
+
 ### Privacy
 
 - Nothing about the person using the app goes with a report. The signed-in
   email address is never attached, events carry no user, the project stores no
   IP address, and the query string is dropped from every URL — a login redirect
   carries a one-time code, and no query this app uses is worth reporting.
-  Reporting is off in development. See "Error reporting" in the README.
+  Reporting is off in development.
+
+- The API sends no more. Its report carries the exception and the Lambda
+  request id, and never the request itself, which on every call holds an
+  `authorization` header with an email address inside the token. Neither
+  project stores an IP address. See "Error reporting" in the README.
 
 ## [1.7.0] — 2026-08-26
 

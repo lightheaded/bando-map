@@ -70,8 +70,17 @@ resource "random_password" "zones_ip_salt" {
 
 data "archive_file" "zones" {
   type        = "zip"
-  source_file = "${path.module}/../backend/zones.mjs"
   output_path = "${path.module}/.terraform/tmp/zones.zip"
+
+  source {
+    content  = file("${path.module}/../backend/zones.mjs")
+    filename = "zones.mjs"
+  }
+
+  source {
+    content  = file("${path.module}/../backend/sentry.mjs")
+    filename = "sentry.mjs"
+  }
 }
 
 resource "aws_iam_role" "zones" {
@@ -141,7 +150,7 @@ resource "aws_lambda_function" "zones" {
   tags             = { Component = "zones" }
 
   environment {
-    variables = {
+    variables = merge(local.lambda_sentry_env, {
       TABLE_NAME       = aws_dynamodb_table.sync.name
       SITE_BUCKET      = aws_s3_bucket.site.bucket
       DISTRIBUTION_ID  = aws_cloudfront_distribution.site.id
@@ -149,7 +158,7 @@ resource "aws_lambda_function" "zones" {
       PER_CLIENT_DAILY = tostring(var.zones_per_client_daily)
       GLOBAL_HOURLY    = tostring(var.zones_global_hourly)
       IP_SALT          = random_password.zones_ip_salt.result
-    }
+    })
   }
 
   depends_on = [aws_cloudwatch_log_group.zones]

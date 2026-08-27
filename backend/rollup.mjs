@@ -19,6 +19,7 @@
 import { gunzipSync } from 'node:zlib'
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb'
 import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3'
+import { reporting } from './sentry.mjs'
 
 const db = new DynamoDBClient({})
 const s3 = new S3Client({})
@@ -153,7 +154,7 @@ async function writeDay(date, counts) {
   )
 }
 
-export const handler = async (event = {}) => {
+export const handler = reporting(async (event = {}) => {
   const days = windowDays(new Date(), Number(event.days ?? DAYS))
   // A day's records sit in that day's folder or the next one (a request at 23:59
   // is usually delivered after midnight), and the newest folder here is today —
@@ -174,7 +175,7 @@ export const handler = async (event = {}) => {
   const summary = [...counts].map(([date, d]) => `${date}: ${d.views} views / ${d.visitors} visitors / ${d.botViews} bot`)
   console.log(`[stats] ${keys.length} objects, ${records.length} records — ${summary.join(', ')}`)
   return { objects: keys.length, records: records.length, days: Object.fromEntries(counts) }
-}
+})
 
 // Exported for local testing against a saved log file.
 export { aggregate, parseRecords, windowDays }

@@ -165,8 +165,17 @@ resource "aws_cloudwatch_log_delivery" "cf_access_s3" {
 
 data "archive_file" "stats_rollup" {
   type        = "zip"
-  source_file = "${path.module}/../backend/rollup.mjs"
   output_path = "${path.module}/.terraform/tmp/stats-rollup.zip"
+
+  source {
+    content  = file("${path.module}/../backend/rollup.mjs")
+    filename = "rollup.mjs"
+  }
+
+  source {
+    content  = file("${path.module}/../backend/sentry.mjs")
+    filename = "sentry.mjs"
+  }
 }
 
 resource "aws_iam_role" "stats_rollup" {
@@ -234,12 +243,12 @@ resource "aws_lambda_function" "stats_rollup" {
   tags             = { Component = "stats" }
 
   environment {
-    variables = {
+    variables = merge(local.lambda_sentry_env, {
       TABLE_NAME = aws_dynamodb_table.sync.name
       LOG_BUCKET = aws_s3_bucket.logs.bucket
       LOG_PREFIX = local.cf_log_prefix
       DAYS       = tostring(var.stats_rollup_days)
-    }
+    })
   }
 
   depends_on = [aws_cloudwatch_log_group.stats_rollup]
