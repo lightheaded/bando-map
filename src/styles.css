@@ -1777,7 +1777,13 @@ details.offline-card summary {
   border-radius: 10px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
   max-width: min(90vw, 420px);
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toast-msg {
+  text-align: left;
 }
 
 .toast-action {
@@ -1787,14 +1793,42 @@ details.offline-card summary {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  margin-left: 12px;
+  margin-left: auto;
   padding: 0;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 
 .toast-action:hover {
   text-decoration: underline;
+}
+
+/* Dismiss: last in the row, and never the widest thing in it. */
+.toast-close {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  /* Square enough for a thumb, without making the toast taller. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: -6px -8px -6px auto;
+  padding: 0;
+  flex: none;
+}
+
+.toast-action + .toast-close {
+  margin-left: 0;
+}
+
+.toast-close:hover {
+  color: #fff;
 }
 
 @media (max-width: 640px) {

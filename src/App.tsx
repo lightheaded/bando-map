@@ -53,21 +53,25 @@ export default function App() {
 
 function Toast() {
   const toast = useAppStore((s) => s.toast)
+  const hideToast = useAppStore((s) => s.hideToast)
   if (!toast) return null
   return (
     <div className="toast" role="status">
-      {toast.msg}
+      <span className="toast-msg">{toast.msg}</span>
       {toast.action && (
         <button
           className="toast-action"
           onClick={() => {
             toast.action!.onClick()
-            useAppStore.setState({ toast: undefined })
+            hideToast()
           }}
         >
           {toast.action.label}
         </button>
       )}
+      <button className="toast-close" onClick={hideToast} title="Dismiss" aria-label="Dismiss">
+        &times;
+      </button>
     </div>
   )
 }

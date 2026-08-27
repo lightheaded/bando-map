@@ -117,6 +117,8 @@ interface AppState {
   select: (id?: number) => void
   setBaseLayer: (l: BaseLayerId) => void
   showToast: (msg: string, action?: { label: string; onClick: () => void }) => void
+  /** Close the toast now — the dismiss button, and the action after it runs. */
+  hideToast: () => void
   setFilters: (patch: Partial<FilterState>) => void
   resetFilters: () => void
   togglePanel: (panel: SidebarPanel) => void
@@ -131,6 +133,14 @@ interface AppState {
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined
+/** A plain toast only reports, so it can go as soon as it is read. */
+const TOAST_MS = 3500
+/**
+ * A toast with an action (e.g. Undo) is a decision, not a report. It must stay
+ * long enough to read the message, find the button and press it — on a phone,
+ * with one hand. The dismiss button closes it before that.
+ */
+const ACTION_TOAST_MS = 20000
 /** In-flight hint fetches, so a toggle spam doesn't stack requests. */
 const hintLoading = new Set<HintSourceId>()
 
@@ -204,9 +214,12 @@ export const useAppStore = create<AppState>((set) => ({
   },
   showToast: (msg, action) => {
     clearTimeout(toastTimer)
-    // Toasts with an action (e.g. Undo) stick around a bit longer.
-    toastTimer = setTimeout(() => set({ toast: undefined }), action ? 6000 : 3500)
+    toastTimer = setTimeout(() => set({ toast: undefined }), action ? ACTION_TOAST_MS : TOAST_MS)
     set({ toast: { msg, action } })
+  },
+  hideToast: () => {
+    clearTimeout(toastTimer)
+    set({ toast: undefined })
   },
   filters: loadSavedFilters(),
   setFilters: (patch) =>
