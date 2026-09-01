@@ -263,6 +263,18 @@ resource "aws_iam_role_policy" "github_deploy" {
 # ---------- Cost guard ----------
 # CloudFront's permanent free tier covers 1 TB/month egress; this is the
 # backstop that emails before a runaway bill. Set alert_email to enable.
+#
+# There are two budgets, and the difference matters. `project` watches only what
+# carries Project=bando-map, so it is the one that can say this project has run
+# away. `monthly` watches the whole account, which holds far more than this
+# project: the first time it fired, this project's whole share of the month was
+# about eight cents. Read a `monthly` alert as "the account moved", never as
+# "the map cost money", and keep budget_limit_usd set to whatever the rest of
+# the account is expected to cost.
+#
+# A tag filter only sees costs recorded after its key was activated, so the
+# project budget reads low until a full month has passed with
+# activate_cost_allocation_tags on.
 
 variable "alert_email" {
   description = "Email for the monthly cost-budget alert; null disables the budget"
@@ -272,8 +284,15 @@ variable "alert_email" {
 }
 
 variable "budget_limit_usd" {
-  type    = number
-  default = 15
+  description = "Account-wide monthly ceiling. Not a project number — see the cost-guard comment above."
+  type        = number
+  default     = 15
+}
+
+variable "project_budget_limit_usd" {
+  description = "Monthly ceiling for costs tagged Project=bando-map. The README projects well under a dollar."
+  type        = number
+  default     = 5
 }
 
 # Tags only show up in Cost Explorer once activated as cost-allocation tags.
@@ -290,6 +309,39 @@ resource "aws_ce_cost_allocation_tag" "keys" {
   for_each = var.activate_cost_allocation_tags ? toset(["Project", "Component"]) : toset([])
   tag_key  = each.value
   status   = "Active"
+}
+
+# What this repository is actually responsible for. Everything here is tagged
+# Project=bando-map (see the default_tags in the provider block), so this is the
+# only budget that answers the question the README's cost tables ask.
+resource "aws_budgets_budget" "project" {
+  count        = var.alert_email == null ? 0 : 1
+  name         = "bando-map-cost-guard"
+  budget_type  = "COST"
+  limit_amount = tostring(var.project_budget_limit_usd)
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  cost_filter {
+    name   = "TagKeyValue"
+    values = ["user:Project$bando-map"]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 80
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.alert_email]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = [var.alert_email]
+  }
 }
 
 resource "aws_budgets_budget" "monthly" {

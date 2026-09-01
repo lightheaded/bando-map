@@ -358,8 +358,13 @@ alert_email = "you@example.com"
 ```
 
 AWS then sends one confirmation mail, and the subscription stays pending until the link in it is
-clicked. The same variable turns on the monthly cost budget, so setting it once does both. Until
+clicked. The same variable turns on both cost budgets, so setting it once does all three. Until
 then the alarms still change state and still show in the CloudWatch console; they just tell nobody.
+
+That file is also where `budget_limit_usd` belongs. It is the ceiling for the whole AWS account
+rather than for this project (see [Two budgets](#two-budgets-and-which-one-to-believe)), so its
+value is a fact about the account and has no place in a public repository. The checked-in default
+is deliberately a placeholder.
 
 ## Cost
 
@@ -401,7 +406,7 @@ Projected monthly cost per component, at idle and at ~5 daily active users (~3k 
 One caveat those rows don't carry: `POST /zones/refresh` is the project's first unauthenticated
 route, and API Gateway bills rejected requests too — the DynamoDB counters stop the *work*, not the
 request charge, so a deliberate flood is bounded only by the stage's existing 10 rps / 20 burst
-throttle (~$27/month at the absolute ceiling) and the AWS budget alarm.
+throttle (~$27/month at the absolute ceiling) and `bando-map-cost-guard`.
 
 Photo uploads are the other line worth stating a ceiling for, because they are the only route that
 stores what a caller sends. They require a signed-in account and are capped per contributor (20/day,
@@ -409,18 +414,34 @@ stores what a caller sends. They require a signed-in account and are capped per 
 account pushing 10,000 uploads would still only cost single-digit dollars — ~$2 of transient storage
 until the lifecycle rule expires it, and pennies of requests, because nothing decodes the images.
 The one genuinely open-ended risk is somebody else hot-linking the *published* photos hard enough to
-exhaust the 1 TB CloudFront free tier, where overage runs ~$85/TB in Europe; the budget alarm would
-catch that long before a bill, and a Referer check is the fix if it ever happens.
+exhaust the 1 TB CloudFront free tier, where overage runs ~$85/TB in Europe. `bando-map-cost-guard`
+would catch that long before a bill, and a Referer check is the fix if it ever happens.
 
 Excluded: DNS. The zone that serves `bando.toom.as` is managed outside this project and costs it
 nothing.
+
+### Two budgets, and which one to believe
+
+`bando-map-cost-guard` filters on `Project=bando-map`, which every resource here carries. It is the
+only budget that answers the question this table asks, and its ceiling is `project_budget_limit_usd`
+($5, against a projection well under a dollar).
+
+`monthly-cost-guard` has no filter. It watches the whole AWS account, which holds much more than
+this project, so **an alert from it is not a statement about the map**. The first time it fired,
+this project's entire share of that month was about eight cents, all of it in `eu-north-1`. Keep
+`budget_limit_usd` at whatever the rest of the account is expected to cost, and read that alert as
+"the account moved".
+
+A tag filter only sees costs recorded after its key was activated. `Project` and `Component` were
+activated on 2026-09-01, so Cost Explorer cannot split anything before that date, and the project
+budget reads low until a full month has passed.
 
 Running record — add a row when a month starts, fill Actual from Cost Explorer
 (filter `Project=bando-map`) after it closes, never rewrite past rows:
 
 | Month | Projected | Actual | Notes |
 |---|---|---|---|
-| 2026-08 | ~$0.05 | | sync launched + community review shipped mid-month, visit stats and the hourly airspace fetcher late in the month; a few users at most |
+| 2026-08 | ~$0.05 | | sync launched + community review shipped mid-month, visit stats and the hourly airspace fetcher late in the month; a few users at most. **Not splittable by tag** — the cost-allocation keys were only activated on 2026-09-01. The per-service figures for `eu-north-1` are the closest available reading |
 | 2026-09 | ~$0.14 | | first full month with accounts + submissions + contributed photos + visit stats + hourly zones, assuming ~5 DAU; also the first full month on bando.toom.as, which adds nothing measurable |
 
 ## Deployment
