@@ -350,8 +350,16 @@ fetcher must run at least once in two hours, the visit-stats rollup at least onc
 report to an SNS topic. `Invocations` returns no data rather than zero when nothing ran, and
 `treat_missing_data = "breaching"` is what turns that silence into an alarm.
 
-Set `alert_email` to receive them. The same variable turns on the monthly cost budget, and no
-address is written down in this repository.
+Nothing reaches anybody until `alert_email` is set. Put it in `infra/terraform.tfvars`, which is
+gitignored for exactly this reason — an address must never become committable — and re-apply:
+
+```hcl
+alert_email = "you@example.com"
+```
+
+AWS then sends one confirmation mail, and the subscription stays pending until the link in it is
+clicked. The same variable turns on the monthly cost budget, so setting it once does both. Until
+then the alarms still change state and still show in the CloudWatch console; they just tell nobody.
 
 ## Cost
 

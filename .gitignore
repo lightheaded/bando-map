@@ -12,5 +12,8 @@ infra/.terraform.lock.hcl
 infra/plan.out
 infra/tfplan*
 infra/*.plan
+# alert_email lives here. An address must never be committable.
+infra/*.tfvars
+infra/*.tfvars.json
 data/pdfs/
 .vite/
