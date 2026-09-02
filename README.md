@@ -285,15 +285,35 @@ Three things reach the `bando-map` project:
   so a failed fetch is a normal event and is filtered out by message. Refused API calls are
   reported explicitly instead, which keeps the real failures visible without the noise.
 
+#### Where the configuration lives, and why not here
+
+**No Sentry identifier is written down in this repository.** A DSN is write-only and a project
+slug is not a credential, but both name the Sentry organisation they belong to, and this repository
+is public — see AGENTS.md, "whose fact is this?". Every one of them is supplied at build or apply
+time instead:
+
+| Value | Supplied by | Absent means |
+|---|---|---|
+| `VITE_SENTRY_DSN` | deploy workflow secret | the app reports nothing |
+| `SENTRY_AUTH_TOKEN` | deploy workflow secret | no source maps, traces stay minified |
+| `SENTRY_ORG`, `SENTRY_PROJECT` | deploy workflow secrets, read by the plugin itself | no source maps |
+| `sentry_dsn` (the API) | `infra/terraform.tfvars`, gitignored | the Lambdas report nothing |
+
+So a clone of this repository builds and runs with error reporting off, and that is the intended
+behaviour rather than a gap. Nothing has to be edited out before sharing it.
+
 #### Source maps and releases
 
 The SDK reports the version from `package.json` as the release, so an issue names the build it
-came from. The deploy workflow builds with `SENTRY_AUTH_TOKEN` in the environment, which turns on
-`@sentry/vite-plugin` in `vite.config.ts`: the build emits hidden source maps, uploads them to the
-matching release and deletes them again. Without the token the build still succeeds and stack
-traces stay minified — that is what a local `npm run build` does. No map is published: the plugin
-removes them, workbox is told not to write its own, and `--exclude "*.map"` in the S3 sync is the
-last line of defence.
+came from. `SENTRY_AUTH_TOKEN` in the environment turns on `@sentry/vite-plugin` in
+`vite.config.ts`: the build emits hidden source maps, uploads them to the matching release and
+deletes them again. No map is published: the plugin removes them, workbox is told not to write its
+own, and `--exclude "*.map"` in the S3 sync is the last line of defence.
+
+One thing to know about that upload: if the token is present but rejected, the plugin logs the
+failure and the build still exits 0. The deploy then succeeds with no source maps, and the next
+issue arrives minified with no other warning. If traces suddenly stop naming real files, read the
+build log for `[sentry-vite-plugin] Error` before looking anywhere else.
 
 The SDK adds ~31 KB gzipped to the app bundle. It is precached with the rest of the shell, so it
 costs one download, not one per visit.
@@ -355,6 +375,7 @@ gitignored for exactly this reason — an address must never become committable 
 
 ```hcl
 alert_email = "you@example.com"
+sentry_dsn  = "https://…@…ingest.de.sentry.io/…"
 ```
 
 AWS then sends one confirmation mail, and the subscription stays pending until the link in it is

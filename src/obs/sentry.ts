@@ -15,12 +15,15 @@ import * as Sentry from '@sentry/react'
 import type { ErrorEvent, EventHint } from '@sentry/react'
 
 /**
- * Write-only ingest key for the `bando-map` project, in the EU region. Public
- * by design — it can post an event and read nothing — and it ships in the
- * bundle like the Cognito client id does. Rotate it in the Sentry project's
- * Client Keys page if it ever needs to change.
+ * Write-only ingest key: it can post an event and read nothing, and it ships in
+ * the bundle either way. It is supplied at build time rather than written down
+ * here because it names the Sentry organisation it belongs to, and this
+ * repository is public — see AGENTS.md, "whose fact is this?".
+ *
+ * Absent, `Sentry.init` runs with no DSN and reports nothing. That is what a
+ * clone of this repository does, and it is the intended behaviour.
  */
-const DSN = 'https://45014709103b167c8ee45f69ecbdd6ac@o4511915104665600.ingest.de.sentry.io/4511982593310800'
+const DSN = import.meta.env.VITE_SENTRY_DSN
 
 /**
  * The login redirect lands on `/?code=…&state=…`. That code is single-use and
@@ -50,8 +53,9 @@ export function initErrorReporting(): void {
   Sentry.init({
     dsn: DSN,
     // A dev server produces the errors you are already looking at. Sending them
-    // would spend the monthly quota on noise and bury the real reports.
-    enabled: import.meta.env.PROD,
+    // would spend the monthly quota on noise and bury the real reports. No DSN
+    // means no reporting either way.
+    enabled: import.meta.env.PROD && Boolean(DSN),
     release: `bando-map@${__APP_VERSION__}`,
     environment: import.meta.env.PROD ? 'production' : 'development',
     sendDefaultPii: false,

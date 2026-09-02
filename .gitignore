@@ -12,8 +12,11 @@ infra/.terraform.lock.hcl
 infra/plan.out
 infra/tfplan*
 infra/*.plan
-# alert_email lives here. An address must never be committable.
+# alert_email and sentry_dsn live here. Neither must ever be committable.
 infra/*.tfvars
 infra/*.tfvars.json
+# The browser build reads VITE_SENTRY_DSN from here in a local production build.
+.env
+.env.*
 data/pdfs/
 .vite/

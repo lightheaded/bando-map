@@ -17,12 +17,14 @@
 
 variable "sentry_dsn" {
   description = <<-EOT
-    Ingest key for the Sentry project that receives Lambda errors. Public by
-    design — it can post an event and read nothing — so it is checked in.
-    Empty disables reporting in every function.
+    Ingest key for the Sentry project that receives Lambda errors. Write-only —
+    it can post an event and read nothing — but it names the Sentry organisation
+    it belongs to, and this repository is public, so it is not written down here.
+    Put it in the gitignored terraform.tfvars next to alert_email. Empty
+    disables reporting in every function, which is what a clone does.
   EOT
   type        = string
-  default     = "https://22c6b9d29acf75fdd6eef5d60d311560@o4511915104665600.ingest.de.sentry.io/4511982703935568"
+  default     = ""
 }
 
 locals {

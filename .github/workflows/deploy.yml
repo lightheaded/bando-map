@@ -26,11 +26,16 @@ jobs:
 
       - run: npm ci
 
-      # The token turns on source-map upload in vite.config.ts. Without it the
-      # build still succeeds, and Sentry stack traces stay minified.
+      # Error reporting is configured entirely from here, because every one of
+      # these values names a Sentry organisation and this repository is public.
+      # The build succeeds without any of them: no DSN means the app reports
+      # nothing, and no token means stack traces stay minified.
       - run: npm run build
         env:
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:

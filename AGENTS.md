@@ -43,6 +43,30 @@ board card. Specifically **never** write:
   this repository" is the whole sentence. Detail that a maintainer needs belongs in the
   private repository that owns the thing, not here.
 
+### The test: whose fact is this?
+
+The list above catches names. It does not catch **facts**, and facts are what keep getting
+through. A measured figure from the live account, a spend forecast, the slug of a
+third-party organisation that also holds unrelated work — none of those look like a
+secret, and no hook flags them, because they are not patterns. They are still the
+operator's business and not this project's.
+
+Before writing any value into this repository, ask where it came from:
+
+- **From this repository's own code, or from running it** — its own cost projections, its
+  own measured bundle size, its own function's memory use. That belongs here.
+- **From looking at the operator's account** — a total bill, an account-wide forecast, an
+  organisation slug, a resource that is not this project's, the number of anything the
+  operator runs. That does **not** belong here, however much it would improve the
+  document.
+
+When a fact of the second kind is genuinely needed to explain something, write the shape
+and drop the value: "an alert from the account-wide budget is not a statement about this
+project" says everything the reader needs, and "$27.92" adds nothing but exposure.
+
+**Noticing is not enough.** Flagging a value in chat and committing it anyway is the same
+outcome as not noticing. The default is to leave it out and ask.
+
 **Assume every commit is permanent.** A force push does **not** remove a commit from
 GitHub: the old SHA stays readable through the API and the web UI until GitHub Support
 runs garbage collection, and the push event — commit message included — is already in
@@ -50,7 +74,10 @@ the public events feed and its public archives. There is no clean undo. The only
 that works is not writing it in the first place.
 
 This happened once, on 2026-08-26, and cost a force push, a deleted release, a deleted
-issue and a support ticket.
+issue and a support ticket. It nearly happened again on 2026-09-01: an account-wide cost
+forecast reached a README, a Terraform comment and a commit message, and was caught in
+review rather than by any rule. A third-party organisation slug from the same work did
+reach the public repository, and had to be moved out afterwards.
 
 The board is fully scriptable (this is the expected interface for agents):
 

@@ -102,11 +102,12 @@ export default defineConfig({
         ],
       },
     }),
-    // After every other plugin, so it sees the final chunks.
+    // After every other plugin, so it sees the final chunks. The organisation
+    // and project come from SENTRY_ORG and SENTRY_PROJECT, which the plugin
+    // reads by itself — naming the organisation here would put it in a public
+    // repository, see AGENTS.md.
     !!sentryAuthToken &&
       sentryVitePlugin({
-        org: 'personal-3tn',
-        project: 'bando-map',
         authToken: sentryAuthToken,
         // Must match the `release` that src/obs/sentry.ts reports.
         release: { name: `bando-map@${pkg.version}` },
