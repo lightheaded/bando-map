@@ -12,9 +12,11 @@ import {
   hintHash,
   hintLayerId,
   hintPlaceComment,
-  hintPopupHtml,
   hintSpotName,
   hintSpotProps,
+  hintStackHtml,
+  orderHints,
+  type HintHit,
   type HintProps,
 } from './hints'
 import {
@@ -32,7 +34,7 @@ import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { useFilteredBandos, resolveBando, revealPlace } from '../state/filters'
 import { syncHashToSelection } from '../state/deeplink'
-import { HINT_SOURCES, type Bando, type HintSourceId, type UserMark } from '../types'
+import { HINT_SOURCES, type Bando, type UserMark } from '../types'
 import { thumbGlyph, thumbUrl } from '../photos/thumb'
 
 const ESTONIA_BOUNDS: [number, number, number, number] = [21.5, 57.4, 28.3, 59.8]
@@ -170,26 +172,51 @@ function syncPhotoMarkers(
  * Hint popup: shareable (#h/… hash while open), with a one-click promotion to
  * a regular custom place — the place then flows through the normal edit /
  * contribute pipeline like any manual addition, with provenance in its note.
+ *
+ * Takes every hint under the cursor, in reporting order. Each entry is wired
+ * independently, so the twin underneath the topmost dot has a working promotion
+ * button and photo strip of its own — with a single `querySelector` only the
+ * first block was ever live.
  */
-function openHintPopup(map: maplibregl.Map, src: HintSourceId, props: HintProps) {
+function openHintPopup(map: maplibregl.Map, hits: HintHit[]) {
+  const ordered = orderHints(hits)
+  if (!ordered.length) return
   const state = useAppStore.getState()
-  const popup = new maplibregl.Popup({ maxWidth: '320px' })
-    .setLngLat([props.lon, props.lat])
-    .setHTML(hintPopupHtml(src, props, state.hintData[src]?.source ?? ''))
+  // Anchored on the topmost hit; the twins sit within a few metres of it, so
+  // there is no anchor that would serve the stack better.
+  const [top] = ordered
+  const popup = new maplibregl.Popup({
+    maxWidth: '320px',
+    // Focusing the close button scrolls a stacked list to its middle, past the
+    // dot that was actually clicked. A lone hint keeps the default focus move.
+    focusAfterOpen: ordered.length === 1,
+  })
+    .setLngLat([top.props.lon, top.props.lat])
+    .setHTML(hintStackHtml(ordered, (src) => state.hintData[src]?.source ?? ''))
     .addTo(map)
-  history.replaceState(null, '', hintHash(src, props))
+  // One popup, one shareable hash: the topmost hit, which is the dot the reader
+  // actually clicked. Following the link reopens that hint alone — a URL that
+  // tried to encode "whatever else happened to be under that pixel" would not
+  // survive a dataset refresh anyway.
+  history.replaceState(null, '', hintHash(top.src, top.props))
   popup.on('close', () => syncHashToSelection())
-  wireHintPhotoWheel(popup.getElement())
-  popup.getElement()?.querySelector<HTMLButtonElement>('.hint-add')?.addEventListener('click', () => {
-    const name = hintSpotName(src, props)
-    const id = useMarksStore.getState().addPlace({ name, lat: props.lat, lon: props.lon })
-    useMarksStore.getState().setMark(id, { comment: hintPlaceComment(src, props) })
-    popup.remove()
-    useAppStore.getState().select(id)
-    const widened = revealPlace(id)
-    useAppStore.getState().showToast(`Saved "${name}" as your place${widened ? ' — filters widened to show it' : ''}`, {
-      label: 'Undo',
-      onClick: () => useMarksStore.getState().removePlace(id),
+  // Both the strip and the button are per-entry; `.hint-popup` is the entry
+  // block in either form (a lone hit renders as one, a stack nests several).
+  const entries = popup.getElement()?.querySelectorAll<HTMLElement>('.hint-popup') ?? []
+  entries.forEach((entry, i) => {
+    const { src, props } = ordered[i]
+    wireHintPhotoWheel(entry)
+    entry.querySelector<HTMLButtonElement>('.hint-add')?.addEventListener('click', () => {
+      const name = hintSpotName(src, props)
+      const id = useMarksStore.getState().addPlace({ name, lat: props.lat, lon: props.lon })
+      useMarksStore.getState().setMark(id, { comment: hintPlaceComment(src, props) })
+      popup.remove()
+      useAppStore.getState().select(id)
+      const widened = revealPlace(id)
+      useAppStore.getState().showToast(`Saved "${name}" as your place${widened ? ' — filters widened to show it' : ''}`, {
+        label: 'Undo',
+        onClick: () => useMarksStore.getState().removePlace(id),
+      })
     })
   })
 }
@@ -217,23 +244,18 @@ function wireHintPhotoWheel(root: HTMLElement | undefined) {
 }
 
 /**
- * The hint dot under the cursor, or nothing. Hint layers overlap freely — an
- * ETAK ruin and its OSM twin are usually the same building — so a click has to
- * pick one: the dot drawn on top. addHintLayers stacks the layers in
- * HINT_SOURCES order, so the last source with a hit is the topmost.
+ * Every hint dot under the cursor. The layers overlap freely — an ETAK ruin and
+ * its OSM twin are usually the same building, one drawn over the other — so the
+ * popup reports the whole pile (ordered and de-duplicated by `orderHints`)
+ * instead of picking the topmost and leaving the rest unreachable.
  */
-function topHintHit(
-  map: maplibregl.Map,
-  point: maplibregl.Point,
-): { src: HintSourceId; props: HintProps } | undefined {
-  const layers = HINT_SOURCES.map(hintLayerId).filter((id) => map.getLayer(id))
-  const hits = map.queryRenderedFeatures(point, { layers })
-  if (!hits.length) return undefined
-  for (const src of [...HINT_SOURCES].reverse()) {
-    const hit = hits.find((f) => f.layer.id === hintLayerId(src))
-    if (hit) return { src, props: hit.properties as HintProps }
-  }
-  return undefined
+function hintHitsAt(map: maplibregl.Map, point: maplibregl.Point): HintHit[] {
+  const srcOf = new Map(HINT_SOURCES.filter((s) => map.getLayer(hintLayerId(s))).map((s) => [hintLayerId(s), s]))
+  if (!srcOf.size) return []
+  return map.queryRenderedFeatures(point, { layers: [...srcOf.keys()] }).flatMap((f) => {
+    const src = srcOf.get(f.layer.id)
+    return src ? [{ src, props: f.properties as HintProps }] : []
+  })
 }
 
 /**
@@ -459,9 +481,9 @@ export function MapView() {
           })
           return
         }
-        const hint = topHintHit(map, e.point)
-        if (hint) {
-          openHintPopup(map, hint.src, hint.props)
+        const hints = hintHitsAt(map, e.point)
+        if (hints.length) {
+          openHintPopup(map, hints)
           return
         }
         const zones = zoneHitsAt(map, e.point)
@@ -542,7 +564,9 @@ export function MapView() {
     const spot = dataset.spots.find((s) => s.id === pendingHint.id)
     map.jumpTo({ center: [pendingHint.lon, pendingHint.lat], zoom: 15 })
     if (spot) {
-      openHintPopup(map, pendingHint.src, hintSpotProps(spot))
+      // A deep link addresses exactly one hint, so it opens as a lone entry —
+      // the neighbours it may overlap are reachable by clicking the dot.
+      openHintPopup(map, [{ src: pendingHint.src, props: hintSpotProps(spot) }])
     } else {
       useAppStore.getState().showToast('That hint is not in the current dataset — showing its location')
     }

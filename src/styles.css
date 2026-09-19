@@ -1911,6 +1911,44 @@ details.offline-card summary {
   color: #6b7280;
 }
 
+/*
+ * Several hint dots under one pixel — an ETAK ruin, its OSM twin, an ESAP
+ * record of the same battery. Each keeps its own .hint-popup block; the stack
+ * scrolls at the same cap as the zone popup rather than growing past the phone.
+ */
+.hint-stack {
+  max-height: min(40vh, 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hint-count {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
+}
+
+/* Hairline between stacked hints; the first entry needs no separator. */
+.hint-stack .hint-popup + .hint-popup {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e5e5;
+}
+
+/* The source's own colour, so the tag matches the dot that was clicked. */
+.hint-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
 /* ---------- Airspace zones (Layers panel + map popup) ---------- */
 
 .map-layers-toggle,

@@ -129,12 +129,26 @@ const esc = (s: string) =>
  * source's own page for the object (`sourceUrl`), the EHR building record, and
  * the map lookups for the coordinate. ETAK, the one source without per-record
  * pages, is looked up through the XGIS link.
+ *
+ * `showSource` adds the coloured source tag next to the name. It is off for a
+ * lone hint — the popup is then unambiguous, and the tag would only repeat what
+ * the attribution line already says — and on inside a stack, where two entries
+ * for the same building are told apart by nothing else (an OSM ruin that
+ * carries a name looks exactly like an ESAP record that carries the same one).
  */
-export function hintPopupHtml(src: HintSourceId, props: HintProps, attribution: string): string {
+export function hintPopupHtml(
+  src: HintSourceId,
+  props: HintProps,
+  attribution: string,
+  showSource = false,
+): string {
   const s = props
   const { x, y } = wgs84ToLest97(s.lat, s.lon)
   const lines: string[] = []
-  lines.push(`<strong>${esc(hintSpotName(src, s))}</strong>`)
+  const tag = showSource
+    ? ` <span class="hint-tag" style="background:${HINT_STYLE[src].color}">${esc(HINT_STYLE[src].label)}</span>`
+    : ''
+  lines.push(`<strong>${esc(hintSpotName(src, s))}</strong>${tag}`)
   if (s.address) lines.push(esc(s.address))
   if (s.m2 != null) lines.push(`Footprint ${s.m2} m² · nearest in-use dwelling ${s.dwellM === 999 ? '>999' : s.dwellM} m`)
   if (s.date) lines.push(`Notice date ${esc(s.date)}`)
@@ -174,6 +188,52 @@ function hintPhotosHtml(src: HintSourceId, s: HintProps): string {
   const href = s.sourceUrl ? ` href="${esc(s.sourceUrl)}" target="_blank" rel="noopener"` : ''
   const imgs = photos.map((p) => `<a${href}><img src="${esc(thumbUrl(s.id, p))}" loading="lazy" alt=""></a>`)
   return `<div class="hint-photos">${imgs.join('')}</div>`
+}
+
+/** One hint dot: which layer it came from, and the feature's flattened props. */
+export type HintHit = { src: HintSourceId; props: HintProps }
+
+/**
+ * Reporting order for a click, one entry per distinct dot: topmost-drawn first,
+ * matching how addHintLayers stacks the layers (HINT_SOURCES order, last on
+ * top). The dot the reader visually clicked leads, and the twins underneath it
+ * follow in a stable order rather than in whatever order the tile query
+ * happened to return them.
+ *
+ * De-duplication is by source + id: a rendered query can hand back the same
+ * point twice when it sits on a tile seam, and the duplicate would otherwise
+ * repeat verbatim inside the popup.
+ */
+export function orderHints(hits: HintHit[]): HintHit[] {
+  const seen = new Set<string>()
+  const unique = hits.filter((h) => {
+    const key = `${h.src}|${h.props.id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  const rank = (src: HintSourceId) => HINT_SOURCES.length - 1 - HINT_SOURCES.indexOf(src)
+  return unique.sort((a, b) => rank(a.src) - rank(b.src))
+}
+
+/**
+ * Popup for every hint dot under the cursor. The layers overlap by design — an
+ * ETAK ruin and its OSM twin are usually the one building, seen by two surveys
+ * — so reporting only the topmost left the other permanently unreachable, along
+ * with its links, photos and its own "save as place" button.
+ *
+ * A single hit renders exactly as it always did: one bare `.hint-popup`, no
+ * header, no wrapper. The stacked form nests those same blocks inside a
+ * scrolling `.hint-stack` so the markup (and every `.hint-popup …` rule) is
+ * shared rather than forked.
+ */
+export function hintStackHtml(hits: HintHit[], attributionOf: (src: HintSourceId) => string): string {
+  if (hits.length === 1) return hintPopupHtml(hits[0].src, hits[0].props, attributionOf(hits[0].src))
+  const entries = hits.map((h) => hintPopupHtml(h.src, h.props, attributionOf(h.src), true))
+  return (
+    `<div class="hint-stack">` +
+    `<div class="hint-count">${hits.length} hints here</div>${entries.join('')}</div>`
+  )
 }
 
 /** The provenance note attached (as the user comment) when a hint becomes a place. */
