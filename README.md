@@ -231,6 +231,12 @@ literally every spot on the map. The app always shows how old its copy is and li
 https://utm.eans.ee/avm/ as the authority: **this is a triage aid, never an authoritative preflight
 source** — check the official map and NOTAMs before flying.
 
+**Overlapping zones.** Airspace stacks: a spot near an airfield can sit inside a control zone, a
+nature zone and an active danger area at once, each binding independently. A click therefore reports
+the whole stack in one popup — every zone under the cursor, most restrictive first, with its own
+verbatim message — rather than only the polygon drawn on top, which hid rules the reader is equally
+bound by.
+
 **Manual refresh.** `POST /zones/refresh` reruns the fetch on demand, throttled to 3 per client per
 day and 10 globally per hour. Both counters are DynamoDB items claimed with a conditional update
 (so two simultaneous refreshes can't both slip past a limit) and expire via TTL. The per-client one

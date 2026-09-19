@@ -219,11 +219,35 @@ function band(p: UasZoneProps): string {
 const dayOf = (iso?: string) => (iso ? iso.slice(0, 10) : '')
 
 /**
- * Popup for one zone. The published message is shown verbatim and unabridged —
- * for a temporary danger area or a nature zone it is the only place the actual
- * rule appears, and paraphrasing airspace rules is not this app's business.
+ * Order zones are reported in: most restrictive first. Overlapping airspace is
+ * the norm near airports, so what the reader needs at the top is the rule that
+ * actually stops them.
  */
-export function zonePopupHtml(p: ZoneFeatureProps, sourceUrl: string): string {
+export const ZONE_RANK: readonly ZoneSeverity[] = ['prohibited', 'permission', 'caution', 'info']
+
+/**
+ * Most-restrictive-first, one entry per distinct zone. A rendered query can
+ * return the same polygon several times (it is split across tiles), and the
+ * duplicates would otherwise repeat verbatim inside the popup.
+ */
+export function orderZones(zones: ZoneFeatureProps[]): ZoneFeatureProps[] {
+  const seen = new Set<string>()
+  const unique = zones.filter((z) => {
+    const key = [z.name, z.lower, z.upper, z.reason, z.start, z.end].join('|')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  return unique.sort((a, b) => ZONE_RANK.indexOf(a.sev) - ZONE_RANK.indexOf(b.sev))
+}
+
+/**
+ * One zone's block inside the popup. The published message is shown verbatim
+ * and unabridged — for a temporary danger area or a nature zone it is the only
+ * place the actual rule appears, and paraphrasing airspace rules is not this
+ * app's business.
+ */
+function zoneEntryHtml(p: ZoneFeatureProps): string {
   const sev = ZONE_SEVERITY[p.sev]
   const lines: string[] = [
     `<strong>${esc(p.name)}</strong> <span class="zone-tag" style="background:${sev.color}">${esc(sev.label)}</span>`,
@@ -234,8 +258,22 @@ export function zonePopupHtml(p: ZoneFeatureProps, sourceUrl: string): string {
   }
   if (p.message) lines.push(`<span class="zone-message">${esc(p.message)}</span>`)
   if (p.conditions) lines.push(`<span class="zone-message">${esc(p.conditions)}</span>`)
+  return `<div class="zone-entry">${lines.join('<br>')}</div>`
+}
+
+/**
+ * Popup for everything the click landed inside. Zones stack — a spot near an
+ * airfield can sit in a CTR, a nature zone and an active danger area at once —
+ * and reporting only the topmost hid rules the reader is equally bound by. So
+ * every zone under the cursor gets its own block, most restrictive first, in
+ * one scrollable popup; the count says how deep the stack is.
+ */
+export function zonePopupHtml(zones: ZoneFeatureProps[], sourceUrl: string): string {
+  const ordered = orderZones(zones)
+  const header =
+    ordered.length > 1 ? `<div class="zone-count">${ordered.length} zones here</div>` : ''
   return (
-    `<div class="zone-popup">${lines.join('<br>')}` +
+    `<div class="zone-popup">${header}${ordered.map(zoneEntryHtml).join('')}` +
     `<div class="zone-links">` +
     `<a href="${esc(sourceUrl)}" target="_blank" rel="noopener">Official drone map</a>` +
     `</div>` +

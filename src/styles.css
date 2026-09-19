@@ -2097,6 +2097,30 @@ details.offline-card summary {
   font-size: 12.5px;
   line-height: 1.5;
   color: #333;
+  /*
+   * A click near an airfield can sit inside half a dozen zones, each with its
+   * own verbatim message — the stack scrolls inside the popup rather than
+   * growing a card taller than the phone.
+   */
+  max-height: min(40vh, 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.zone-count {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
+}
+
+/* Hairline between stacked zones; the first entry needs no separator. */
+.zone-entry + .zone-entry {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e5e5;
 }
 
 .zone-tag {

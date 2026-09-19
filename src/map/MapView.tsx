@@ -41,8 +41,6 @@ const VIEW_KEY = 'bando-map:view'
 /** The authority this layer defers to — linked from every zone popup. */
 const ZONE_OFFICIAL_URL = 'https://utm.eans.ee/avm/'
 const ZONE_ATTRIBUTION = `UAS zones: <a href="${ZONE_OFFICIAL_URL}" target="_blank" rel="noopener">EANS</a>`
-/** Most restrictive first — decides which overlapping zone a click reports. */
-const ZONE_RANK = ['prohibited', 'permission', 'caution', 'info'] as const
 
 const isMobile = () => window.matchMedia('(max-width: 640px)').matches
 
@@ -239,16 +237,15 @@ function topHintHit(
 }
 
 /**
- * The zone a click reports. Zones overlap heavily near airports; the click
- * lands on the most restrictive one rather than whichever happens to be drawn
- * on top.
+ * Every zone the click landed inside. Zones overlap heavily near airports, and
+ * each one binds independently — so the popup reports the whole stack (ordered
+ * and de-duplicated by `zonePopupHtml`), not just the topmost polygon.
  */
-function topZoneHit(map: maplibregl.Map, point: maplibregl.Point): ZoneFeatureProps | undefined {
-  if (!map.getLayer(ZONE_FILL_LAYER)) return undefined
+function zoneHitsAt(map: maplibregl.Map, point: maplibregl.Point): ZoneFeatureProps[] {
+  if (!map.getLayer(ZONE_FILL_LAYER)) return []
   return map
     .queryRenderedFeatures(point, { layers: [ZONE_FILL_LAYER] })
     .map((hit) => hit.properties as ZoneFeatureProps)
-    .sort((a, b) => ZONE_RANK.indexOf(a.sev) - ZONE_RANK.indexOf(b.sev))[0]
 }
 
 function toGeoJSON(bandos: Bando[], marks: Record<number, UserMark>): FeatureCollection {
@@ -422,11 +419,12 @@ export function MapView() {
         },
       })
 
-      // One click, one answer. Layer-scoped handlers all fire for the same
+      // One click, one popup. Layer-scoped handlers all fire for the same
       // click — a hint dot inside an airspace zone used to open both popups at
       // once — so every map click is resolved here instead, against whatever
       // sits topmost under the cursor. The airspace fill is the last thing
-      // asked, which makes it clickable only where nothing is drawn over it.
+      // asked, which makes it clickable only where nothing is drawn over it;
+      // once it answers, it answers for every zone under the cursor at once.
       map.on('click', async (e) => {
         const state = useAppStore.getState()
         // Move tool: the next tap is the corrected position.
@@ -466,11 +464,14 @@ export function MapView() {
           openHintPopup(map, hint.src, hint.props)
           return
         }
-        const zone = topZoneHit(map, e.point)
-        if (zone) {
-          new maplibregl.Popup({ closeButton: true, maxWidth: '320px' })
+        const zones = zoneHitsAt(map, e.point)
+        if (zones.length) {
+          // focusAfterOpen would scroll the stacked list to the focused close
+          // button, landing the reader in the middle of the popup instead of
+          // on the most restrictive zone at the top.
+          new maplibregl.Popup({ closeButton: true, maxWidth: '320px', focusAfterOpen: false })
             .setLngLat(e.lngLat)
-            .setHTML(zonePopupHtml(zone, ZONE_OFFICIAL_URL))
+            .setHTML(zonePopupHtml(zones, ZONE_OFFICIAL_URL))
             .addTo(map)
           return
         }
