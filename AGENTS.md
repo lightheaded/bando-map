@@ -113,9 +113,17 @@ as the board, an issue never is.
 
 - GitHub account: **`lightheaded`** — always, for this repo (`gh auth switch -u lightheaded`
   if another account is active). Git identity:
-  `Tom Välja <3413870+lightheaded@users.noreply.github.com>`, GPG-signed commits
-  (key `C41391CFF4DDCC5E`). Remote via the `github-personal` SSH host alias.
-- **Every commit must be GPG-signed; never push unsigned commits.** `commit.gpgsign` is
+  `lightheaded <3413870+lightheaded@users.noreply.github.com>` — the alias name, never
+  `Tom Välja`, which belongs to Glia (work) commits only. Remote via the
+  `github-personal` SSH host alias on the Mac; mgr pushes the HTTPS remote with the
+  `gh` token.
+- **Every commit must be signed; never push unsigned commits.** Which key depends on the
+  host: OpenPGP `C41391CFF4DDCC5E` on the Mac, SSH (`~/.ssh/id_ed25519`, registered on the
+  account as a signing key) on mgr, where that OpenPGP secret does not exist. Both show as
+  Verified on GitHub. Neither identity nor signing config belongs in this repo's
+  `.git/config` on mgr — it comes from the store there (casa's
+  `infrastructure/mgr/modules/shell.nix`), and a repository-local value would silently
+  beat it. `commit.gpgsign` is
   on and the global pre-push hook (`~/.git-hooks/pre-push`) blocks unsigned pushes — never
   bypass it with `--no-verify`. Verify with `git log --format='%h %G? %s' origin/main..HEAD`:
   every line must show `G` (plumbing like `git commit-tree` skips `commit.gpgsign` — pass `-S`). If an unsigned commit sneaks in, re-sign/rewrite before pushing. The full
