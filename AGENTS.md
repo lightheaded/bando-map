@@ -113,9 +113,13 @@ as the board, an issue never is.
 
 - GitHub account: **`lightheaded`** — always, for this repo (`gh auth switch -u lightheaded`
   if another account is active). Git identity:
-  `Tom Välja <3413870+lightheaded@users.noreply.github.com>`, GPG-signed commits
-  (key `C41391CFF4DDCC5E`). Remote via the `github-personal` SSH host alias.
-- **Every commit must be GPG-signed; never push unsigned commits.** `commit.gpgsign` is
+  `lightheaded <3413870+lightheaded@users.noreply.github.com>` — the alias name, for
+  every commit and every machine.
+- **Every commit must be signed; never push unsigned commits.** Two signing keys are
+  registered on the account, OpenPGP `C41391CFF4DDCC5E` and an SSH key; both show as
+  Verified on GitHub. Identity and signing come from each machine's own configuration,
+  managed outside this repository. Never set them in this repo's `.git/config`: a
+  repository-local value silently beats the machine's. `commit.gpgsign` is
   on and the global pre-push hook (`~/.git-hooks/pre-push`) blocks unsigned pushes — never
   bypass it with `--no-verify`. Verify with `git log --format='%h %G? %s' origin/main..HEAD`:
   every line must show `G` (plumbing like `git commit-tree` skips `commit.gpgsign` — pass `-S`). If an unsigned commit sneaks in, re-sign/rewrite before pushing. The full
