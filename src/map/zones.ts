@@ -1,8 +1,10 @@
 /**
- * UAS geographical zones — Estonia's drone-restriction airspace, drawn under
- * everything else as translucent polygons. Data comes from data/zones.json,
- * refreshed hourly by backend/zones.mjs from the feed behind the official
- * drone map at https://utm.eans.ee/avm/.
+ * UAS geographical zones — drone-restriction airspace, drawn under everything
+ * else as translucent polygons. Two copies feed it: data/zones.json for
+ * Estonia, refreshed hourly by backend/zones.mjs from the feed behind
+ * https://utm.eans.ee/avm/, and data/zones-es.json for the Canary Islands,
+ * refreshed hourly by scripts/zones-es.ts from ENAIRE behind
+ * https://drones.enaire.es.
  *
  * This is a triage aid, not a preflight briefing: it answers "is this spot
  * worth driving to" from the sofa. The popup links the official map on every
@@ -13,6 +15,15 @@ import type { UasZoneDataset, UasZoneProps } from '../types'
 
 /** The open-category ceiling in metres AGL — the default "does this affect me" cut. */
 export const OPEN_CATEGORY_CEILING = 120
+
+/** The official map each copy defers to — linked from every zone popup. */
+export const OFFICIAL_MAP = {
+  EE: 'https://utm.eans.ee/avm/',
+  ES: 'https://drones.enaire.es/?locale=en',
+} as const
+
+/** What the ENAIRE copy covers (W, S, E, N) — loaded only when the view reaches it. */
+export const ES_COVERAGE: [number, number, number, number] = [-18.4, 27.5, -13.3, 29.5]
 
 export const ZONE_SOURCE = 'uas-zones'
 export const ZONE_FILL_LAYER = 'uas-zones-fill'
@@ -70,10 +81,36 @@ const OPEN_CATEGORY = /^\s*open category/i
 export function zoneSeverity(p: UasZoneProps): ZoneSeverity {
   const message = p.message ?? ''
   if (p.restriction === 'PROHIBITED') return 'prohibited'
+  // Spanish bird protection areas say outright that they neither allow nor
+  // forbid a flight; the "it is prohibited to … disturb wild animals" in their
+  // text is about the birds, and would otherwise trip the permission rule.
+  if (p.reason === 'Birds') return 'caution'
   if (p.restriction === 'REQ_AUTHORISATION' || p.reason === 'Sensitive' || p.reason === 'Nature') return 'permission'
   if (DEMANDS_PERMISSION.test(message)) return 'permission'
   if (OPEN_CATEGORY.test(message)) return 'info'
   return 'caution'
+}
+
+/**
+ * EANS files "Outside Estonia" (EERZout) as the whole globe with Estonia cut
+ * out of it, so it is a red "No flight" over every other country — Tenerife
+ * included. Its point is the border, so its outer ring is cut down to a box
+ * around Estonia; the hole, which is the border itself, stays exact.
+ */
+const AROUND_ESTONIA: [number, number][] = [
+  [17, 55],
+  [17, 62.5],
+  [32, 62.5],
+  [32, 55],
+  [17, 55],
+]
+
+function trimWorldRing(geometry: UasZoneDataset['features'][number]['geometry']) {
+  if (geometry.type !== 'Polygon') return geometry
+  const [outer, ...holes] = geometry.coordinates
+  const lons = outer.map(([x]) => x)
+  if (Math.max(...lons) - Math.min(...lons) < 359) return geometry
+  return { type: 'Polygon' as const, coordinates: [AROUND_ESTONIA, ...holes] }
 }
 
 /** The flattened shape MapLibre carries; `sev` is computed here, never in the file. */
@@ -84,12 +121,16 @@ export type ZoneFeatureProps = UasZoneProps & { sev: ZoneSeverity }
  * as a MapLibre `case` expression, so the paint and the popup can never drift
  * apart from `zoneSeverity` above.
  */
-export function zoneFeatureCollection(dataset: UasZoneDataset): GeoJSON.FeatureCollection {
+export function zoneFeatureCollection(datasets: (UasZoneDataset | undefined)[]): GeoJSON.FeatureCollection {
   return {
     type: 'FeatureCollection',
-    features: dataset.features.map((f) => ({
+    features: datasets
+      .flatMap((d) => d?.features ?? [])
+      // An offline copy outlives its NOTAMs; one that has ended is not drawn.
+      .filter((f) => !f.properties.end || new Date(f.properties.end).getTime() > Date.now())
+      .map((f) => ({
       type: 'Feature',
-      geometry: f.geometry,
+      geometry: trimWorldRing(f.geometry),
       properties: { ...f.properties, sev: zoneSeverity(f.properties) } satisfies ZoneFeatureProps,
     })),
   }
@@ -108,7 +149,22 @@ const severityColorExpr = [
  * pilot; without this cut the map is a solid wash.
  */
 export function zoneFilter(ceiling: number): maplibregl.FilterSpecification {
-  return ['<', ['get', 'lower'], ceiling] as unknown as maplibregl.FilterSpecification
+  // The Spanish "urban environment" zone is one polygon over the whole country
+  // that says "check whether you are in a town". Drawn, it would paint every
+  // field the same as a town centre, so it is never drawn: its text goes into
+  // every popup inside the ENAIRE coverage instead (see urbanNote).
+  return [
+    'all',
+    ['<', ['get', 'lower'], ceiling],
+    ['!=', ['get', 'layer'], 'urban'],
+  ] as unknown as maplibregl.FilterSpecification
+}
+
+/** The text of the never-drawn Spanish urban zone, for clicks inside its coverage. */
+export function urbanNote(dataset: UasZoneDataset | undefined, lng: number, lat: number): string | undefined {
+  const [w, s, e, n] = ES_COVERAGE
+  if (!dataset || lng < w || lng > e || lat < s || lat > n) return undefined
+  return dataset.features.find((f) => f.properties.layer === 'urban')?.properties.message
 }
 
 export function addZoneLayers(map: maplibregl.Map, beforeId: string, attribution: string) {
@@ -267,16 +323,34 @@ function zoneEntryHtml(p: ZoneFeatureProps): string {
  * and reporting only the topmost hid rules the reader is equally bound by. So
  * every zone under the cursor gets its own block, most restrictive first, in
  * one scrollable popup; the count says how deep the stack is.
+ *
+ * `note` is the text of the never-drawn Spanish urban zone (see urbanNote). It
+ * is the same long text at every point, so it stays folded. The links name the
+ * official map of every country the stack comes from.
  */
-export function zonePopupHtml(zones: ZoneFeatureProps[], sourceUrl: string): string {
+export function zonePopupHtml(zones: ZoneFeatureProps[], note?: string): string {
   const ordered = orderZones(zones)
   const header =
     ordered.length > 1 ? `<div class="zone-count">${ordered.length} zones here</div>` : ''
+  const entries = ordered.map(zoneEntryHtml)
+  if (!ordered.length) entries.push('<div class="zone-entry"><strong>No mapped zone below this height</strong></div>')
+  if (note) {
+    entries.push(
+      `<div class="zone-entry"><details><summary>Urban environment (ENAIRE)</summary>` +
+        `<span class="zone-message">${esc(note)}</span></details></div>`,
+    )
+  }
+  const countries = [...new Set(ordered.map((z) => z.country ?? 'EE'))]
+  if (note && !countries.includes('ES')) countries.push('ES')
+  const links = countries
+    .map(
+      (c) =>
+        `<a href="${esc(OFFICIAL_MAP[c])}" target="_blank" rel="noopener">Official drone map${countries.length > 1 ? ` (${c})` : ''}</a>`,
+    )
+    .join(' · ')
   return (
-    `<div class="zone-popup">${header}${ordered.map(zoneEntryHtml).join('')}` +
-    `<div class="zone-links">` +
-    `<a href="${esc(sourceUrl)}" target="_blank" rel="noopener">Official drone map</a>` +
-    `</div>` +
+    `<div class="zone-popup">${header}${entries.join('')}` +
+    `<div class="zone-links">${links}</div>` +
     `<div class="zone-source">Always confirm on the official map and NOTAMs before flying.</div></div>`
   )
 }

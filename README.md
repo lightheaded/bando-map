@@ -25,6 +25,7 @@ The base map is Maa-amet's own tile service — the same detailed base map, orth
 - **Hint layers** — four supplementary sources for leads the register doesn't list: 36,323 ETAK ruin footprints, 3,760 OSM ruins, 3,025 military-heritage sites and 698 officially ownerless buildings, each linking and previewing its own source record. The sources see the same buildings, so the dots sit on top of one another: a click reports every hint under the cursor in one popup, each with its own links, photos and save button, rather than only the dot drawn last.
 - **Remoteness grading** — every ETAK footprint carries its area and its distance to the nearest lived-in house, so the 36k can be cut down to big buildings well clear of occupied yards before you drive anywhere. Both cuts are on by default.
 - **Airspace before you drive** — Estonia's official UAS drone zones, drawn under the spots by default and coloured by how much they actually restrict flying. Each zone carries its vertical band, so the layer answers "how high can I legally go here" instead of "am I in a zone" (a countrywide 150–2900 m band covers every spot on the map). The Layers menu on the map holds the height cut, the legend, the copy's age and a Refresh — refreshed hourly regardless, going red past 6 hours, with https://utm.eans.ee/avm/ and NOTAMs staying the authority before a flight.
+- **The Canary Islands too** — Spain's official UAS zones for the islands, from ENAIRE: airspace, infrastructure, protected nature and bird areas, and the drone NOTAMs. They load once the map reaches the islands, over IGN's Spanish base map and orthophoto, and a click lists every zone at that point, most restrictive first. The offline save covers them, so the check works on a hillside with no signal. ENAIRE's own map is slow and often times out; this copy is refreshed hourly and served from our CDN.
 - **Your own places** — add spots the register never had, with names and notes; they ride along in exports.
 - **Corrections** — drag a misplaced pin to where the building actually is (with undo), or fix the register fields themselves.
 - **Community sourcing** — submit those corrections for review; once approved they reach every visitor within seconds, no rescrape. Rejections always come with a reason. An admin is the reviewer, so their own contributions publish on submission.
@@ -250,6 +251,46 @@ is rewritten on every run so its `checkedAt` stays honest about when we last loo
 is only invalidated when the zones themselves changed. Deploys via `terraform -chdir=infra apply`,
 NOT via the site workflow.
 
+### Canary Islands (ENAIRE)
+
+`scripts/zones-es.ts`, run hourly by `.github/workflows/zones-es.yml`: Spain's UAS geographical
+zones for the Canary Islands, from the public ArcGIS services of ENAIRE behind
+https://drones.enaire.es, published as `data/zones-es.json`.
+
+ENAIRE's services answer in about a second when they answer, but they often drop the TLS
+handshake, and IPv6 connections hang. The official map is therefore slow or blank at the moment a
+pilot needs it. The script retries every request, and a layer that still fails keeps its features
+from the previous published copy and its older `checkedAt`. One flaky service then shows as old in
+the Layers menu, not as an empty map.
+
+Six source layers go into one file, each converted to the schema of the Estonian copy
+(`UasZoneProps` in `src/types.ts`):
+
+| Layer | Source | How the app judges it |
+|---|---|---|
+| `aero` | documented zone service, `SRV_UAS_ZG_data_V2` layer 2 (ED-318 fields) | its `type`; nearly all are `REQ_AUTHORIZATION` |
+| `infra` | same service, layer 0 | same |
+| `urban` | same service, layer 3 | never drawn, see below |
+| `nature` | protected nature areas, `ENP_APP_Local_V4` layer 0 | permission needed: national and natural parks such as Teide need the manager's authorisation |
+| `birds` | bird protection areas (ZEPA), same service, layer 1 | caution: the source says they neither allow nor forbid a flight |
+| `notam` | drone NOTAMs, `NOTAM_UAS_APP_V3` layer 1 | `RTCA` (restricted area active) needs permission, `WULW` (UAS flying) is a caution |
+
+The urban layer is one polygon over the whole of Spain that tells the pilot to check whether the
+flight is in an urban environment. Drawn, it would paint every field like a town centre, so the
+map hides it and puts its text, folded, into every popup inside the coverage.
+
+The server simplifies the shapes before it sends them (about 5 m for airspace, 20 m for the nature
+and bird coastlines), which takes the file from 22 MB to about 1.7 MB (about 430 kB gzipped).
+NOTAMs that have ended are dropped by the script, and again by the app for an offline copy.
+
+The workflow uses the site's deploy role: one PutObject on `data/zones-es.json` and an
+invalidation only when the zones changed. Run it now with
+`gh workflow run zones-es.yml --repo lightheaded/bando-map`. Locally,
+`node scripts/zones-es.ts --out public/data/zones-es.json` writes a copy the dev server serves.
+
+The texts are ENAIRE's, mostly in Spanish, shown verbatim. ENAIRE's map and NOTAMs (Icaro XXI)
+stay the authority before a flight.
+
 ## Error reporting
 
 Both halves report their own faults to [Sentry](https://sentry.io), in the EU region and in two
@@ -422,6 +463,10 @@ Projected monthly cost per component, at idle and at ~5 daily active users (~3k 
 | CloudFront invalidations (zones) | $0 | $0 | only when the zones actually change; even invalidating every run, 730 + deploys stays under the 1,000 free paths/month |
 | DynamoDB (zones meta + throttle) | $0 | <$0.01 | one meta write per run plus two counter writes per manual refresh |
 | API Gateway (POST /zones/refresh) | $0 | <$0.01 | capped at 10/hour globally ≈ 7,200/mo worst case at $1.06/M |
+| Spanish zones workflow (GitHub Actions) | $0 | $0 | hourly run of under a minute; Actions minutes are free on a public repository |
+| S3 PUTs + storage (Spanish zones) | $0 | <$0.01 | one 1.7 MB PUT per run ≈ $0.004/mo |
+| CloudFront invalidations (Spanish zones) | $0 | $0 | only when the zones changed, in practice when a NOTAM comes or goes — a few a day. Even with the Estonian ones, that stays under the 1,000 free paths/month; past it a path costs $0.005 |
+| CloudFront egress (Spanish zones) | $0 | $0 | about 430 kB per session that reaches the Canary Islands; sessions in Estonia never fetch it |
 | S3 storage (contributed photos) | $0 | <$0.01 | ~210 KB per approved photo (1600 px + 480 px webp), plus a review copy that expires after 180 days. 200 photos ≈ 42 MB ≈ $0.001/mo; even 5,000 ≈ 1 GB ≈ $0.024/mo |
 | Lambda + API Gateway (photo upload, preview, publish, delete) | $0 | <$0.01 | two requests per upload, one per review preview, one per deletion. No image decoding happens server-side — the browser resizes and re-encodes — so this is base64 decoding and S3 copies, far inside the free tier even at 1,000 uploads/month |
 | CloudFront egress (contributed photos) | $0 | $0 | thumbnails are the same ~30 KB as the register's; a heavy 50-place session with community photos adds ~4 MB, so ~600 MB/month at 5 DAU against a **1 TB** permanent free tier. It would take ~250,000 such sessions a month to leave it |
@@ -540,7 +585,9 @@ fields rather than changing what the existing ones mean.
   - Officially ownerless buildings: [Ametlikud Teadaanded](https://www.ametlikudteadaanded.ee/) (peremehetu ehitise hõivamise teated) — spots keep the announcing municipality's contact and link the original notice; last-known-owner names are not redistributed
 - Contributed photos: their photographers, who declare the photo their own work when they upload it and agree to it being published here. They are not part of this repository and are not offered for reuse; a photographer who uploaded one can delete it themselves from the place's detail panel, and anyone else who wants one taken down should [open an issue](https://github.com/lightheaded/bando-map/issues) so that a reviewer can remove it
 - UAS geographical zones: [EANS Estonian drone map](https://utm.eans.ee/avm/) (Lennuliiklusteeninduse AS) — the official airspace feed, refetched hourly and shown with attribution and the age of our copy; advisory here, with the official map and NOTAMs remaining the authority before a flight
+- UAS geographical zones, Canary Islands: © [ENAIRE](https://drones.enaire.es/), the rights holder of its AIS data services, as its conditions of use require; refetched hourly, advisory here in the same way
+- Base map and orthophoto in Spain: © [IGN España](https://www.ign.es/) (IGN Base, PNOA), CC BY 4.0
 
 The source code is [MIT-licensed](LICENSE). Register data and photos are not part of this repository and remain with their respective owners.
 
-Fly responsibly: heritage-listed buildings are protected — look, film, don't touch. Check local drone regulations (https://transpordiamet.ee/droonid) before flying.
+Fly responsibly: heritage-listed buildings are protected — look, film, don't touch. Check local drone regulations (https://transpordiamet.ee/droonid; in Spain https://www.seguridadaerea.gob.es/es/ambitos/drones) before flying.

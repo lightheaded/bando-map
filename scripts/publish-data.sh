@@ -24,12 +24,14 @@ BUCKET="${BUCKET:-bando-map-site}"
 aws s3 sync public/thumbs "s3://$BUCKET/thumbs" \
   --cache-control "public,max-age=31536000,immutable"
 
-# Both of these are owned by Lambdas — community.json by the sync Lambda
-# (written on submission approval), zones.json by the zones fetcher — so a
-# stale local copy must never overwrite them.
+# These are owned by their writers — community.json by the sync Lambda
+# (written on submission approval), zones.json by the zones fetcher,
+# zones-es.json by the zones-es workflow — so a stale local copy must never
+# overwrite them.
 aws s3 sync public/data "s3://$BUCKET/data" \
   --exclude "community.json" \
   --exclude "zones.json" \
+  --exclude "zones-es.json" \
   --cache-control "public,max-age=300,must-revalidate"
 
 DISTRIBUTION_ID="${DISTRIBUTION_ID:-$(aws cloudfront list-distributions \

@@ -22,9 +22,8 @@ import {
   isStale,
   relativeAge,
   type ZoneSeverity,
+  OFFICIAL_MAP,
 } from '../map/zones'
-
-const OFFICIAL_URL = 'https://utm.eans.ee/avm/'
 
 function toggle<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
@@ -132,9 +131,16 @@ function Airspace() {
   const zoneData = useAppStore((s) => s.zoneData)
   const zoneState = useAppStore((s) => s.zoneState)
   const refreshZones = useAppStore((s) => s.refreshZones)
+  const zoneDataEs = useAppStore((s) => s.zoneDataEs)
 
   const stale = isStale(zoneData?.checkedAt)
-  const shown = zoneData?.features.filter((f) => f.properties.lower < filters.zoneCeiling).length
+  const staleEs = !!zoneDataEs && isStale(zoneDataEs.checkedAt)
+  const failedEs = Object.entries(zoneDataEs?.layers ?? {})
+    .filter(([, l]) => l.failed)
+    .map(([k]) => k)
+  const shown = [zoneData, zoneDataEs]
+    .flatMap((d) => d?.features ?? [])
+    .filter((f) => f.properties.lower < filters.zoneCeiling && f.properties.layer !== 'urban').length
 
   return (
     <section className="layers-section">
@@ -165,7 +171,7 @@ function Airspace() {
           </label>
           <span className="hint-sub-note">
             {OPEN_CATEGORY_CEILING} m is the open-category ceiling
-            {shown != null ? ` · ${shown} zones shown` : ''}
+            {zoneData || zoneDataEs ? ` · ${shown} zones shown` : ''}
           </span>
 
           <ul className="zone-legend">
@@ -197,13 +203,35 @@ function Airspace() {
               temporary danger area could have come or gone since. Refresh before you rely on it.
             </p>
           )}
+          {zoneDataEs && (
+            <div className="zone-freshness">
+              <span className={staleEs ? 'stale' : undefined}>
+                Canary Islands (ENAIRE): checked {relativeAge(zoneDataEs.checkedAt)}
+                {failedEs.length ? ` · last check failed for ${failedEs.join(', ')}` : ''}
+              </span>
+            </div>
+          )}
+          {staleEs && (
+            <p className="zone-stale-warning">
+              The Spanish copy is over {STALE_AFTER_HOURS} hours old. ENAIRE is often slow to answer, so the hourly
+              copy can fall behind; a NOTAM may have changed since. Check the{' '}
+              <a href={OFFICIAL_MAP.ES} target="_blank" rel="noopener">
+                ENAIRE map
+              </a>{' '}
+              before you fly.
+            </p>
+          )}
 
           <p className="zone-disclaimer">
-            A planning aid, not a preflight briefing. Always confirm on the{' '}
-            <a href={OFFICIAL_URL} target="_blank" rel="noopener">
-              official drone map
+            A planning aid, not a preflight briefing. Always confirm on the official drone map —{' '}
+            <a href={OFFICIAL_MAP.EE} target="_blank" rel="noopener">
+              Estonia
+            </a>
+            ,{' '}
+            <a href={OFFICIAL_MAP.ES} target="_blank" rel="noopener">
+              Spain
             </a>{' '}
-            and check NOTAMs before you fly.
+            — and check NOTAMs before you fly.
           </p>
         </>
       )}

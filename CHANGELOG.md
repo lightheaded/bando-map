@@ -7,6 +7,32 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.9.0] — 2026-10-30
+
+### Added
+
+- **Drone zones for the Canary Islands.** The airspace layer now also draws
+  Spain's official UAS zones for the islands, copied hourly from ENAIRE:
+  airspace, infrastructure, protected nature areas, bird areas and the drone
+  NOTAMs. ENAIRE's own map is slow and often times out, so the copy is served
+  from our CDN and the Layers menu shows its age. It loads only when the map
+  reaches the islands.
+- **A Spanish base map.** IGN's map, orthophoto and hybrid overlay show in
+  Spain, behind the same Map, Aerial and Hybrid buttons. The offline save
+  downloads them, so a saved island works without signal.
+
+### Changed
+
+- **A click lists everything at that point**, not only the top item: every
+  airspace zone, most restrictive first, and every hint dot. Zones stack near
+  airports and parks, and the question is whether any of them stops you.
+
+### Fixed
+
+- **"Outside Estonia" no longer covers the rest of the world.** EANS files it as
+  the whole globe minus Estonia, which painted every other country "No flight".
+  It is now cut to a box around Estonia; the border band is unchanged.
+
 ## [1.8.0] — 2026-08-27
 
 ### Added

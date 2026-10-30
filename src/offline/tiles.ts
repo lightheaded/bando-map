@@ -1,11 +1,18 @@
-import { sourcesFor, tileUrl, type BaseLayerId } from '../map/layers'
+import { sourcesFor, tileUrl, type BaseLayerId, type TileSourceId } from '../map/layers'
 
 /** Street-level detail; deeper zooms explode the tile count for little gain. */
 export const MAX_SAVE_ZOOM = 16
 /** Download budget per save (~150–300 MB depending on layer). */
 export const MAX_SAVE_TILES = 8000
 /** Rough per-tile size for the pre-download estimate, refined live during it. */
-const EST_TILE_BYTES: Record<string, number> = { kaart: 15_000, foto: 35_000, hybriid: 8_000 }
+const EST_TILE_BYTES: Record<TileSourceId, number> = {
+  kaart: 15_000,
+  foto: 35_000,
+  hybriid: 8_000,
+  'ign-kaart': 20_000,
+  'ign-foto': 30_000,
+  'ign-hybriid': 10_000,
+}
 
 const lonToX = (lon: number, z: number) => Math.floor(((lon + 180) / 360) * 2 ** z)
 const latToY = (lat: number, z: number) => {
@@ -36,7 +43,7 @@ export function planAreaSave(
 ): AreaPlan {
   const [w, s, e, n] = bounds
   const zFrom = Math.max(4, Math.floor(currentZoom))
-  const sources = sourcesFor(layer)
+  const sources = sourcesFor(layer, bounds)
   const tilesAt = (z: number) => (lonToX(e, z) - lonToX(w, z) + 1) * (latToY(s, z) - latToY(n, z) + 1)
 
   // Deepest zoom whose cumulative tile count stays within budget.

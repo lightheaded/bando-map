@@ -22,9 +22,12 @@ import {
 import {
   addZoneLayers,
   setZonesVisible,
+  urbanNote,
   zoneFeatureCollection,
   zoneFilter,
   zonePopupHtml,
+  ES_COVERAGE,
+  OFFICIAL_MAP,
   ZONE_FILL_LAYER,
   ZONE_LINE_LAYER,
   ZONE_SOURCE,
@@ -40,9 +43,10 @@ import { thumbGlyph, thumbUrl } from '../photos/thumb'
 const ESTONIA_BOUNDS: [number, number, number, number] = [21.5, 57.4, 28.3, 59.8]
 const VIEW_KEY = 'bando-map:view'
 
-/** The authority this layer defers to — linked from every zone popup. */
-const ZONE_OFFICIAL_URL = 'https://utm.eans.ee/avm/'
-const ZONE_ATTRIBUTION = `UAS zones: <a href="${ZONE_OFFICIAL_URL}" target="_blank" rel="noopener">EANS</a>`
+/** The authorities this layer defers to. ENAIRE's terms ask to be named as the rights holder. */
+const ZONE_ATTRIBUTION =
+  `UAS zones: <a href="${OFFICIAL_MAP.EE}" target="_blank" rel="noopener">EANS</a> · ` +
+  `<a href="${OFFICIAL_MAP.ES}" target="_blank" rel="noopener">© ENAIRE</a>`
 
 const isMobile = () => window.matchMedia('(max-width: 640px)').matches
 
@@ -487,13 +491,17 @@ export function MapView() {
           return
         }
         const zones = zoneHitsAt(map, e.point)
-        if (zones.length) {
+        // Inside the ENAIRE coverage the never-drawn urban zone still applies,
+        // so its note opens a popup even where no drawn zone answers.
+        const app = useAppStore.getState()
+        const note = app.filters.zones ? urbanNote(app.zoneDataEs, e.lngLat.lng, e.lngLat.lat) : undefined
+        if (zones.length || note) {
           // focusAfterOpen would scroll the stacked list to the focused close
           // button, landing the reader in the middle of the popup instead of
           // on the most restrictive zone at the top.
           new maplibregl.Popup({ closeButton: true, maxWidth: '320px', focusAfterOpen: false })
             .setLngLat(e.lngLat)
-            .setHTML(zonePopupHtml(zones, ZONE_OFFICIAL_URL))
+            .setHTML(zonePopupHtml(zones, note))
             .addTo(map)
           return
         }
@@ -539,18 +547,28 @@ export function MapView() {
   // Airspace zones: fetch on first enable, then drive visibility and the
   // "affects flight below N m" cut from state.
   const zoneData = useAppStore((s) => s.zoneData)
+  const zoneDataEs = useAppStore((s) => s.zoneDataEs)
+  // The Spanish copy loads once the view touches the Canary Islands.
+  const viewInSpain = useAppStore((s) => {
+    const b = s.mapView?.bounds
+    const [w, so, e, n] = ES_COVERAGE
+    return !!b && b[0] < e && b[2] > w && b[1] < n && b[3] > so
+  })
   useEffect(() => {
     if (filters.zones && !zoneData) useAppStore.getState().loadZones()
+    if (filters.zones && viewInSpain && !zoneDataEs) useAppStore.getState().loadZonesEs()
     const map = mapRef.current
     if (!map || !sourceReady) return
     setZonesVisible(map, filters.zones)
-    if (zoneData) {
-      ;(map.getSource(ZONE_SOURCE) as maplibregl.GeoJSONSource | undefined)?.setData(zoneFeatureCollection(zoneData))
+    if (zoneData || zoneDataEs) {
+      ;(map.getSource(ZONE_SOURCE) as maplibregl.GeoJSONSource | undefined)?.setData(
+        zoneFeatureCollection([zoneData, zoneDataEs]),
+      )
     }
     for (const id of [ZONE_FILL_LAYER, ZONE_LINE_LAYER]) {
       if (map.getLayer(id)) map.setFilter(id, zoneFilter(filters.zoneCeiling))
     }
-  }, [filters.zones, filters.zoneCeiling, zoneData, sourceReady])
+  }, [filters.zones, filters.zoneCeiling, zoneData, zoneDataEs, viewInSpain, sourceReady])
 
   // Hint deep link (#h/<src>/<id>): once the layer's data is in, zoom to the
   // spot and open its popup — the layer itself was enabled by applyHash.

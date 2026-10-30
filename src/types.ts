@@ -100,10 +100,11 @@ export interface HintLayerDataset {
 
 /**
  * One UAS geographical zone — a piece of airspace with rules for unmanned
- * flight, as published by EANS behind https://utm.eans.ee/avm/. Written by the
- * zones Lambda (backend/zones.mjs), which passes the source's own fields
- * through without judging them; what counts as restrictive is decided in
- * src/map/zones.ts so the rule lives in one place.
+ * flight. Two writers produce it: the zones Lambda (backend/zones.mjs) from
+ * EANS behind https://utm.eans.ee/avm/ for Estonia, and scripts/zones-es.ts
+ * from ENAIRE behind https://drones.enaire.es for the Canary Islands. Both pass
+ * the source's own fields through without judging them; what counts as
+ * restrictive is decided in src/map/zones.ts so the rule lives in one place.
  */
 export interface UasZoneProps {
   /** Source identifier, e.g. "EEGZ24S". Unique per zone. */
@@ -133,6 +134,10 @@ export interface UasZoneProps {
   messageEt?: string
   /** Extra free-text conditions; absent on most zones. */
   conditions?: string
+  /** "ES" for the ENAIRE copy; absent on the Estonian one. Picks the official map a popup links. */
+  country?: 'ES'
+  /** Which source layer of the ENAIRE copy the zone came from ("aero", "notam", …). */
+  layer?: string
 }
 
 /**
@@ -149,9 +154,19 @@ export interface UasZoneDataset {
   checkedAt: string
   source: string
   attribution: string
+  /** ENAIRE copy only: a digest of the features, so the fetcher can tell a change from a recheck. */
+  hash?: string
+  /**
+   * ENAIRE copy only: one entry per source layer. A layer that failed keeps
+   * its previous features and its older `checkedAt`, so one flaky service
+   * shows as old rather than as empty.
+   */
+  layers?: Record<string, { checkedAt?: string; count: number; failed?: boolean }>
   features: {
     type: 'Feature'
-    geometry: { type: 'Polygon'; coordinates: [number, number][][] }
+    geometry:
+      | { type: 'Polygon'; coordinates: [number, number][][] }
+      | { type: 'MultiPolygon'; coordinates: [number, number][][][] }
     properties: UasZoneProps
   }[]
 }

@@ -1,0 +1,65 @@
+name: Spanish zones
+
+# Copies ENAIRE's UAS zones for the Canary Islands to data/zones-es.json on the
+# site (see scripts/zones-es.ts and README "Airspace zones"). ENAIRE's services
+# are too slow and too flaky to call from the browser, so this pays for them
+# once an hour and the app reads our CDN copy.
+#
+# It runs here and not in a Lambda because it needs nothing the deploy role
+# does not already allow: one PutObject under the site bucket and one
+# invalidation.
+
+on:
+  schedule:
+    # Hourly, off the top of the hour. The zones change on AIRAC dates, every
+    # 28 days; the hour is for the drone NOTAMs.
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: zones-es
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24 runs the TypeScript script natively, so no npm ci is needed.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The published copy is the fallback for any layer that fails this run.
+      - name: Read the published copy
+        run: curl -sSf -m 60 https://bando.toom.as/data/zones-es.json -o previous.json || echo "no previous copy"
+
+      - name: Fetch from ENAIRE
+        id: fetch
+        run: node scripts/zones-es.ts --out zones-es.json --previous previous.json
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-north-1
+
+      # Rewritten on every run so `checkedAt` stays true; the 5-minute cache
+      # matches the Estonian copy. The invalidation fires only on a change.
+      - name: Publish
+        run: |
+          aws s3 cp zones-es.json "s3://${{ vars.S3_BUCKET }}/data/zones-es.json" \
+            --content-type application/json \
+            --cache-control "public, max-age=300, must-revalidate"
+
+      - name: Invalidate CloudFront
+        if: steps.fetch.outputs.changed == 'true'
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/data/zones-es.json"

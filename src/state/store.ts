@@ -98,6 +98,13 @@ interface AppState {
   zoneData?: UasZoneDataset
   zoneState: 'idle' | 'loading' | 'refreshing'
   loadZones: () => void
+  /**
+   * The ENAIRE copy for the Canary Islands. Loaded only once the view reaches
+   * them, so a session in Estonia never downloads it.
+   */
+  zoneDataEs?: UasZoneDataset
+  zoneStateEs: 'idle' | 'loading'
+  loadZonesEs: () => void
   /** Ask the backend to re-poll the official source. Throttled server-side. */
   refreshZones: () => void
   /** Layers menu, anchored under its button on the map. */
@@ -246,6 +253,7 @@ export const useAppStore = create<AppState>((set) => ({
   },
   setPendingHint: (pendingHint) => set({ pendingHint }),
   zoneState: 'idle',
+  zoneStateEs: 'idle',
   layersPopover: false,
   setLayersPopover: (layersPopover) => set({ layersPopover }),
   loadZones: () => {
@@ -257,6 +265,16 @@ export const useAppStore = create<AppState>((set) => ({
       .then((zoneData) => set({ zoneData }))
       .catch(() => useAppStore.getState().showToast('Airspace zones unavailable — are you offline?'))
       .finally(() => set({ zoneState: 'idle' }))
+  },
+  loadZonesEs: () => {
+    const s = useAppStore.getState()
+    if (s.zoneDataEs || s.zoneStateEs !== 'idle') return
+    set({ zoneStateEs: 'loading' })
+    fetch(`${import.meta.env.BASE_URL}data/zones-es.json`)
+      .then((res) => (res.ok ? (res.json() as Promise<UasZoneDataset>) : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((zoneDataEs) => set({ zoneDataEs }))
+      .catch(() => useAppStore.getState().showToast('Spanish airspace zones unavailable — are you offline?'))
+      .finally(() => set({ zoneStateEs: 'idle' }))
   },
   refreshZones: () => {
     if (useAppStore.getState().zoneState !== 'idle') return

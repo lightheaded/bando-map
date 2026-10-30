@@ -71,7 +71,7 @@ export default defineConfig({
             // so this goes to the network first and falls back to the cached
             // copy only when offline, where the app shows the copy's age.
             // Must precede the /data/ rule below, same as community.json.
-            urlPattern: ({ url }) => url.pathname === '/data/zones.json',
+            urlPattern: ({ url }) => url.pathname === '/data/zones.json' || url.pathname === '/data/zones-es.json',
             handler: 'NetworkFirst',
             options: { cacheName: 'bando-data', networkTimeoutSeconds: 4, cacheableResponse: { statuses: [200] } },
           },
@@ -89,7 +89,9 @@ export default defineConfig({
           {
             // Maa-amet serves CORS-clean tiles, so cached responses keep real
             // sizes — the storage meter stays honest.
-            urlPattern: ({ url }) => url.hostname === 'tiles.maaamet.ee',
+            // IGN (Spain) is the same: CORS-clean, and in the same cache, so
+            // the Offline panel counts and clears both countries together.
+            urlPattern: ({ url }) => url.hostname === 'tiles.maaamet.ee' || url.hostname === 'www.ign.es',
             handler: 'CacheFirst',
             options: { cacheName: 'bando-tiles', cacheableResponse: { statuses: [200] } },
           },

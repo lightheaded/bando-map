@@ -2175,6 +2175,8 @@ details.offline-card summary {
   display: inline-block;
   margin-top: 4px;
   color: #555;
+  /* The ENAIRE texts are paragraphs; their breaks survive as newlines. */
+  white-space: pre-line;
 }
 
 .zone-links {
