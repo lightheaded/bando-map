@@ -279,6 +279,35 @@ function toFeature(raw: Raw, layer: LayerKey): Feature | undefined {
   }
 }
 
+/**
+ * The ED-318 layers publish their texts in Spanish only. scripts/zones-es-en.json
+ * holds an English line for each Spanish line, made once and committed, so the
+ * run needs no translation service. A line that is not in the table stays in
+ * Spanish inside `messageEn` and is logged, so somebody can add it. `message`
+ * stays the Spanish original: the app shows it under the English, and the
+ * severity rule reads it.
+ */
+const SPANISH_LAYERS = new Set<string>(['aero', 'infra', 'urban'])
+const ENGLISH: Record<string, string> = JSON.parse(
+  readFileSync(new URL('./zones-es-en.json', import.meta.url), 'utf8'),
+)
+const untranslated = new Set<string>()
+
+function withEnglish(f: Feature): Feature {
+  const p = f.properties
+  if (!p.message || !SPANISH_LAYERS.has(p.layer ?? '')) return f
+  const messageEn = p.message
+    .split('\n')
+    .map((line) => {
+      if (!line.trim()) return line
+      const en = ENGLISH[line.trim()]
+      if (en === undefined) untranslated.add(line.trim())
+      return en ?? line
+    })
+    .join('\n')
+  return { ...f, properties: { ...p, messageEn } }
+}
+
 /** A NOTAM that has ended is dropped here, so a stale copy cannot show it. */
 const current = (f: Feature, now: number) => !f.properties.end || new Date(f.properties.end).getTime() > now
 
@@ -313,7 +342,11 @@ async function main() {
     }
   }
 
-  const live = features.filter((f) => current(f, now.getTime()))
+  const live = features.filter((f) => current(f, now.getTime())).map(withEnglish)
+  if (untranslated.size) {
+    console.log(`::warning::${untranslated.size} Spanish line(s) have no English in scripts/zones-es-en.json`)
+    for (const line of untranslated) console.log(`  ${line}`)
+  }
   const hash = createHash('sha256').update(JSON.stringify(live)).digest('hex')
   const changed = hash !== previous?.hash
   const failed = Object.values(layers).filter((l) => l.failed).length

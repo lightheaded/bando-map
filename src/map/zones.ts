@@ -164,7 +164,8 @@ export function zoneFilter(ceiling: number): maplibregl.FilterSpecification {
 export function urbanNote(dataset: UasZoneDataset | undefined, lng: number, lat: number): string | undefined {
   const [w, s, e, n] = ES_COVERAGE
   if (!dataset || lng < w || lng > e || lat < s || lat > n) return undefined
-  return dataset.features.find((f) => f.properties.layer === 'urban')?.properties.message
+  const urban = dataset.features.find((f) => f.properties.layer === 'urban')?.properties
+  return urban?.messageEn ?? urban?.message
 }
 
 export function addZoneLayers(map: maplibregl.Map, beforeId: string, attribution: string) {
@@ -301,7 +302,8 @@ export function orderZones(zones: ZoneFeatureProps[]): ZoneFeatureProps[] {
  * One zone's block inside the popup. The published message is shown verbatim
  * and unabridged — for a temporary danger area or a nature zone it is the only
  * place the actual rule appears, and paraphrasing airspace rules is not this
- * app's business.
+ * app's business. A Spanish zone shows our line-by-line English first, and
+ * ENAIRE's Spanish original folded under it.
  */
 function zoneEntryHtml(p: ZoneFeatureProps): string {
   const sev = ZONE_SEVERITY[p.sev]
@@ -312,7 +314,13 @@ function zoneEntryHtml(p: ZoneFeatureProps): string {
   if (!p.permanent && (p.start || p.end)) {
     lines.push(`<em>Active ${esc(dayOf(p.start))} → ${esc(dayOf(p.end))}</em>`)
   }
-  if (p.message) lines.push(`<span class="zone-message">${esc(p.message)}</span>`)
+  if (p.messageEn) {
+    // The English is our translation; the Spanish is what ENAIRE published.
+    lines.push(
+      `<span class="zone-message">${esc(p.messageEn)}</span>`,
+      `<details><summary>Original (Spanish)</summary><span class="zone-message">${esc(p.message ?? '')}</span></details>`,
+    )
+  } else if (p.message) lines.push(`<span class="zone-message">${esc(p.message)}</span>`)
   if (p.conditions) lines.push(`<span class="zone-message">${esc(p.conditions)}</span>`)
   return `<div class="zone-entry">${lines.join('<br>')}</div>`
 }

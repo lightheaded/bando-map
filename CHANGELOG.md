@@ -7,6 +7,18 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.10.0] — 2026-10-31
+
+### Added
+
+- **The Spanish zone texts in English.** ENAIRE publishes the airspace,
+  infrastructure and urban zone texts in Spanish only. The popup now shows an
+  English translation, with ENAIRE's Spanish original folded under it. A line
+  that ENAIRE adds later shows in Spanish until it is translated.
+- **The map remembers "show my location".** If it was on when you left, the map
+  centres on you again the next time it opens. A pan away or a tap that turns
+  it off makes the map open where you left it, as before.
+
 ## [1.9.0] — 2026-10-30
 
 ### Added

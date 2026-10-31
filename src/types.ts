@@ -132,6 +132,8 @@ export interface UasZoneProps {
   message?: string
   /** Estonian version of the same message. */
   messageEt?: string
+  /** English version of a Spanish `message` (ENAIRE copy; see scripts/zones-es-en.json). */
+  messageEn?: string
   /** Extra free-text conditions; absent on most zones. */
   conditions?: string
   /** "ES" for the ENAIRE copy; absent on the Estonian one. Picks the official map a popup links. */

@@ -42,6 +42,8 @@ import { thumbGlyph, thumbUrl } from '../photos/thumb'
 
 const ESTONIA_BOUNDS: [number, number, number, number] = [21.5, 57.4, 28.3, 59.8]
 const VIEW_KEY = 'bando-map:view'
+/** Set while the location control centres on the user, so the next open does too. */
+const FOLLOW_KEY = 'bando-map:followLocation'
 
 /** The authorities this layer defers to. ENAIRE's terms ask to be named as the rights holder. */
 const ZONE_ATTRIBUTION =
@@ -339,10 +341,16 @@ export function MapView() {
       positionOptions: { enableHighAccuracy: true },
       trackUserLocation: true,
     })
-    geolocate.on('error', () =>
-      useAppStore.getState().showToast('Location unavailable — check location permissions for this browser'),
-    )
+    // Remember "centred on me": the next open centres on the user again. A pan
+    // away or a tap that turns it off ends tracking, and so clears the flag.
+    geolocate.on('trackuserlocationstart', () => localStorage.setItem(FOLLOW_KEY, '1'))
+    geolocate.on('trackuserlocationend', () => localStorage.removeItem(FOLLOW_KEY))
+    geolocate.on('error', (e: GeolocationPositionError) => {
+      if (e.code === e.PERMISSION_DENIED) localStorage.removeItem(FOLLOW_KEY)
+      useAppStore.getState().showToast('Location unavailable — check location permissions for this browser')
+    })
     map.addControl(geolocate, 'top-right')
+    if (localStorage.getItem(FOLLOW_KEY)) map.once('load', () => geolocate.trigger())
     // Order in the stack: Layers under "show my location", + under Layers.
     map.addControl(new LayersControl(), 'top-right')
     map.addControl(new AddPlaceControl(), 'top-right')
