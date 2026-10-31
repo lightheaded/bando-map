@@ -5,6 +5,9 @@ import type { BaseLayerId } from '../map/layers'
 import { useMarksStore } from './marks'
 import { DEFAULT_FILTERS, type FilterState } from './filters'
 
+/** A pin on any map point (#p/ link or long press). `fly` = move the map to it. */
+export type DroppedPin = { lat: number; lon: number; label?: string; fly?: boolean }
+
 /** Inline sidebar sections — one open at a time. */
 export type SidebarPanel = 'filters' | 'offline' | 'storage' | 'sync' | 'contribute' | 'admin'
 
@@ -76,8 +79,11 @@ interface AppState {
   moveTarget?: number
   /** Admin review: pin-move diff drawn on the map ([lon, lat] pairs). */
   reviewDiff?: { before?: [number, number]; after: [number, number] }
-  /** One-shot map target for deep links whose id wasn't found. */
-  pendingView?: { lat: number; lon: number }
+  /**
+   * A dropped pin: any point on the map, from a long press / right-click or a
+   * #p/ link. Not a place and never synced. `fly` = move the map to it.
+   */
+  droppedPin?: DroppedPin
   /** Current map viewport (west,south,east,north + center + zoom), updated on moveend. */
   mapView?: { bounds: [number, number, number, number]; center: [number, number]; zoom: number }
   /** Live zoom, updated continuously during zoom gestures (mapView only updates on moveend). */
@@ -132,7 +138,7 @@ interface AppState {
   setPlaceDraft: (draft?: 'picking' | { lat: number; lon: number }) => void
   setMoveTarget: (id?: number) => void
   setReviewDiff: (diff?: { before?: [number, number]; after: [number, number] }) => void
-  setPendingView: (view?: { lat: number; lon: number }) => void
+  setDroppedPin: (pin?: DroppedPin) => void
   setMapView: (view: { bounds: [number, number, number, number]; center: [number, number]; zoom: number }) => void
   setMapZoom: (zoom: number) => void
   setSheetOpen: (open: boolean) => void
@@ -319,7 +325,7 @@ export const useAppStore = create<AppState>((set) => ({
   setPlaceDraft: (draft) => set({ placeDraft: draft }),
   setMoveTarget: (id) => set({ moveTarget: id }),
   setReviewDiff: (reviewDiff) => set({ reviewDiff }),
-  setPendingView: (view) => set({ pendingView: view }),
+  setDroppedPin: (droppedPin) => set({ droppedPin }),
   sheetOpen: false,
   setMapView: (view) => set({ mapView: view, mapZoom: view.zoom }),
   setMapZoom: (zoom) => set({ mapZoom: zoom }),

@@ -7,6 +7,23 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.11.0] — 2026-10-31
+
+### Added
+
+- **Share a link to any point, with a pin.** Right-click the map, or press and
+  hold on a phone, to drop a pin. Its popup gives the coordinates (and L-EST97
+  in Estonia), a Share button, Copy coordinates, and Save as place. A link of
+  the form `#p/<lat>,<lon>/<label>` opens the map with the pin, and the label is
+  optional. The pin is not a place and does not sync.
+- **Open any point in Google Maps or OpenStreetMap** from the pin popup. In
+  Estonia, the popup also links to XGIS.
+
+### Changed
+
+- A shared spot that is not in your dataset now shows a pin at its location,
+  not only the map around it.
+
 ## [1.10.0] — 2026-10-31
 
 ### Added

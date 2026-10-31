@@ -37,11 +37,16 @@ import { useAppStore } from '../state/store'
 import { useMarksStore } from '../state/marks'
 import { useFilteredBandos, resolveBando, revealPlace } from '../state/filters'
 import { syncHashToSelection } from '../state/deeplink'
+import { showDroppedPin } from './droppedPin'
 import { HINT_SOURCES, type Bando, type UserMark } from '../types'
 import { thumbGlyph, thumbUrl } from '../photos/thumb'
 
 const ESTONIA_BOUNDS: [number, number, number, number] = [21.5, 57.4, 28.3, 59.8]
 const VIEW_KEY = 'bando-map:view'
+/** A touch held this long without moving drops a pin. */
+const LONG_PRESS_MS = 550
+const LONG_PRESS_SLOP_PX = 10
+
 /** Set while the location control centres on the user, so the next open does too. */
 const FOLLOW_KEY = 'bando-map:followLocation'
 
@@ -309,7 +314,7 @@ export function MapView() {
   const filters = useAppStore((s) => s.filters)
   const placeDraft = useAppStore((s) => s.placeDraft)
   const moveTarget = useAppStore((s) => s.moveTarget)
-  const pendingView = useAppStore((s) => s.pendingView)
+  const droppedPin = useAppStore((s) => s.droppedPin)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -453,6 +458,42 @@ export function MapView() {
         },
       })
 
+      // Drop a pin: right-click with a mouse, long press on touch. Android
+      // Chrome fires contextmenu for a long press as well, and iOS Safari never
+      // does, so the touch timer covers both and contextmenu right after it is
+      // ignored. Neither works while a tap is already spoken for (Move, Add).
+      let lastDrop = 0
+      const dropPin = (lngLat: maplibregl.LngLat) => {
+        const state = useAppStore.getState()
+        if (state.moveTarget != null || state.placeDraft) return
+        lastDrop = Date.now()
+        state.setDroppedPin({ lat: lngLat.lat, lon: lngLat.lng })
+      }
+      map.on('contextmenu', (e) => {
+        e.preventDefault()
+        if (Date.now() - lastDrop < 1000) return
+        dropPin(e.lngLat)
+      })
+      let press: { timer: number; x: number; y: number } | undefined
+      const cancelPress = () => {
+        if (press) clearTimeout(press.timer)
+        press = undefined
+      }
+      map.on('touchstart', (e) => {
+        cancelPress()
+        if (e.originalEvent.touches.length !== 1) return
+        const { lngLat, point } = e
+        press = { timer: window.setTimeout(() => dropPin(lngLat), LONG_PRESS_MS), x: point.x, y: point.y }
+      })
+      map.on('touchmove', (e) => {
+        if (!press) return
+        if (e.originalEvent.touches.length !== 1 || Math.hypot(e.point.x - press.x, e.point.y - press.y) > LONG_PRESS_SLOP_PX)
+          cancelPress()
+      })
+      map.on('touchend', cancelPress)
+      map.on('touchcancel', cancelPress)
+      map.on('movestart', cancelPress)
+
       // One click, one popup. Layer-scoped handlers all fire for the same
       // click — a hint dot inside an airspace zone used to open both popups at
       // once — so every map click is resolved here instead, against whatever
@@ -460,6 +501,8 @@ export function MapView() {
       // asked, which makes it clickable only where nothing is drawn over it;
       // once it answers, it answers for every zone under the cursor at once.
       map.on('click', async (e) => {
+        // The finger lifting after a long press is not a tap on the map.
+        if (Date.now() - lastDrop < 1000) return
         const state = useAppStore.getState()
         // Move tool: the next tap is the corrected position.
         if (state.moveTarget != null) {
@@ -765,13 +808,16 @@ export function MapView() {
     }
   }, [placeDraft])
 
-  // Deep link to a location that isn't in the dataset.
+  // The dropped pin. A pin from a link (`fly`) also brings the map to it.
+  const droppedPinRef = useRef<maplibregl.Marker | undefined>(undefined)
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !sourceReady || !pendingView) return
-    map.jumpTo({ center: [pendingView.lon, pendingView.lat], zoom: 15 })
-    useAppStore.getState().setPendingView(undefined)
-  }, [pendingView, sourceReady])
+    if (!map) return
+    droppedPinRef.current = showDroppedPin(map, droppedPinRef.current, droppedPin)
+    if (droppedPin?.fly) {
+      map.jumpTo({ center: [droppedPin.lon, droppedPin.lat], zoom: Math.max(map.getZoom(), 15), padding: livePadding() })
+    }
+  }, [droppedPin])
 
   return (
     <div

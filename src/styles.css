@@ -1905,6 +1905,32 @@ details.offline-card summary {
 .hint-popup .hint-links a {
   white-space: nowrap;
 }
+/* Dropped pin (any map point): coordinates, map links and its actions. */
+.pin-popup .pin-coords {
+  margin-top: 4px;
+  color: #374151;
+}
+.pin-popup .pin-coords code {
+  user-select: all;
+}
+.pin-popup .pin-coords span {
+  font-size: 12px;
+  color: #6b7280;
+}
+.pin-popup .pin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+.dropped-pin {
+  cursor: pointer;
+}
+/* A long press drops a pin — iOS must not open its own callout over the map. */
+.map-container {
+  -webkit-touch-callout: none;
+}
+
 .hint-popup .hint-source {
   margin-top: 4px;
   font-size: 11px;

@@ -384,6 +384,9 @@ export const ESAP_THUMB_URL = (slug: string, photo: string) =>
 
 export const GMAPS_URL = (lat: number, lon: number) => `https://www.google.com/maps?q=${lat},${lon}`
 
+export const OSM_URL = (lat: number, lon: number) =>
+  `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=17/${lat}/${lon}`
+
 export const GMAPS_DIRECTIONS_URL = (lat: number, lon: number) =>
   `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`
 
