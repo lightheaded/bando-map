@@ -813,7 +813,7 @@ export function MapView() {
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    droppedPinRef.current = showDroppedPin(map, droppedPinRef.current, droppedPin)
+    droppedPinRef.current = showDroppedPin(map, droppedPinRef.current, droppedPin, livePadding)
     if (droppedPin?.fly) {
       map.jumpTo({ center: [droppedPin.lon, droppedPin.lat], zoom: Math.max(map.getZoom(), 15), padding: livePadding() })
     }

@@ -7,6 +7,16 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.11.1] — 2026-10-31
+
+### Fixed
+
+- **The dropped-pin popup is always fully visible.** It opens above the pin,
+  fits the screen width on a phone, and the map pans until the pin and the
+  popup clear the edges, the sidebar, the sheet, the map buttons and the
+  attribution. Before, a pin near an edge opened its popup to the side and
+  partly off-screen.
+
 ## [1.11.0] — 2026-10-31
 
 ### Added
