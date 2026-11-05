@@ -82,10 +82,16 @@ const withMargin = (p: { top: number; left: number; right: number; bottom: numbe
   bottom: p.bottom + m,
 })
 
-/** Survives dev-server reloads and accidental refreshes. */
+/**
+ * The last view, so the next open starts where the reader left off. In
+ * localStorage, not sessionStorage: a closed tab or a relaunched home-screen
+ * app starts a new session, and would fall back to all of Estonia.
+ */
 function savedView(): { center: [number, number]; zoom: number } | undefined {
   try {
-    return JSON.parse(sessionStorage.getItem(VIEW_KEY) ?? '')
+    const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? '')
+    const ok = Array.isArray(v?.center) && v.center.every(Number.isFinite) && Number.isFinite(v.zoom)
+    return ok ? v : undefined
   } catch {
     return undefined
   }
@@ -368,7 +374,11 @@ export function MapView() {
         center: [c.lng, c.lat],
         zoom: map.getZoom(),
       })
-      sessionStorage.setItem(VIEW_KEY, JSON.stringify({ center: [c.lng, c.lat], zoom: map.getZoom() }))
+      try {
+        localStorage.setItem(VIEW_KEY, JSON.stringify({ center: [c.lng, c.lat], zoom: map.getZoom() }))
+      } catch {
+        // Storage blocked (private mode): the next open starts on Estonia.
+      }
     }
     map.on('moveend', publishView)
     // 'zoom' catches the cluster→photo handover mid-gesture, 'moveend' pans,

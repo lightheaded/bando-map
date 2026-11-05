@@ -7,6 +7,15 @@ All notable changes to Bando Map. The format is based on
 Versions up to and including v0.13.0 were tagged retroactively from git
 history — the dates are the real commit dates.
 
+## [1.11.2] — 2026-11-05
+
+### Fixed
+
+- **The map opens where you left it.** Before, it opened on all of Estonia
+  each time the tab or the home-screen app started again, unless "show my
+  location" was still on. If "show my location" is on, it still centres on
+  you.
+
 ## [1.11.1] — 2026-10-31
 
 ### Fixed
